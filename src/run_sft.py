@@ -46,6 +46,7 @@ def _evaluate(
 def _train(
     args: argparse.Namespace,
     model: AutoModelWithLMHead,
+    tokenizer: AutoTokenizer,
     train_loader: DataLoader,
     eval_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
@@ -89,6 +90,7 @@ def _train(
             model_name = args.model_id.split('/')[-1]
             ckpt_path = f"{args.ckpt_dir}/{model_name}_sft_epoch={epoch}_loss={best_loss}"
             model.save_pretrained(ckpt_path)
+            tokenizer.save_pretrained(ckpt_path)
 
         print(f"Best valid loss: {best_loss}")
         print(f"Valid loss: {valid_loss} || Valid perplexity: {valid_ppl}")
