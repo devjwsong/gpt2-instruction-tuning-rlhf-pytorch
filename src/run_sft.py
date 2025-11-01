@@ -128,7 +128,7 @@ def main(args: argparse.Namespace):
                               collate_fn=ppd.pad_collate, 
                               batch_size=args.batch_size,
                               shuffle=True, num_workers=4, pin_memory=True)
-    eval_loader = DataLoader(train_set, 
+    eval_loader = DataLoader(eval_set, 
                              collate_fn=ppd.pad_collate, 
                              batch_size=args.batch_size,
                              num_workers=4, pin_memory=True)
