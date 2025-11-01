@@ -5,7 +5,7 @@ import os
 import math
 
 from _util import _fix_seed, SFTDataset, PadCollate
-from transformers import AutoTokenizer, AutoModelWithLMHead, get_polynomial_decay_schedule_with_warmup
+from transformers import AutoTokenizer, AutoModelForCausalLM, get_polynomial_decay_schedule_with_warmup
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -14,7 +14,7 @@ import numpy as np
 
 
 def _evaluate(
-    model: AutoModelWithLMHead,
+    model: AutoModelForCausalLM,
     eval_loader: DataLoader
 ) -> Tuple[float, float]:
     print("[Validation]")
@@ -45,7 +45,7 @@ def _evaluate(
 
 def _train(
     args: argparse.Namespace,
-    model: AutoModelWithLMHead,
+    model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
     train_loader: DataLoader,
     eval_loader: DataLoader,
@@ -114,7 +114,7 @@ def main(args: argparse.Namespace):
 
     # Load the tokenizer and model.
     tokenizer = AutoTokenizer.from_pretrained(args.model_id)
-    model = AutoModelWithLMHead.from_pretrained(args.model_id).to(device)
+    model = AutoModelForCausalLM.from_pretrained(args.model_id).to(device)
 
     # Preprocess Dataset objects.
     print("[# of data samples after pre-processing]")
