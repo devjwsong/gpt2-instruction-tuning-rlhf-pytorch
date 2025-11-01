@@ -48,7 +48,7 @@ def _train(
     model: AutoModelWithLMHead,
     train_loader: DataLoader,
     eval_loader: DataLoader,
-    optimizer: torch.optim.optimizer.Optimizer,
+    optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
 ):
     _fix_seed(args.seed)
@@ -86,7 +86,8 @@ def _train(
         if valid_loss < best_loss:
             best_loss = valid_loss
             print("Best validation loss updated. Checkpointing...")
-            ckpt_path = f"{args.ckpt_dir}/sft_epoch={epoch}_loss={best_loss}"
+            model_name = args.model_id.split('/')[-1]
+            ckpt_path = f"{args.ckpt_dir}/{model_name}_sft_epoch={epoch}_loss={best_loss}"
             model.save_pretrained(ckpt_path)
 
         print(f"Best valid loss: {best_loss}")
@@ -107,7 +108,7 @@ def main(args: argparse.Namespace):
     print()
 
     # Set the GPU.
-    device = torch.device(f"cuda: {args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the tokenizer and model.
     tokenizer = AutoTokenizer.from_pretrained(args.model_id)
@@ -160,14 +161,14 @@ def main(args: argparse.Namespace):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=42, help="The random seed.")
-    parser.add_argument('--data_dir', type=str, default=".data", help="The name of the parent directory where data files are stored.")
+    parser.add_argument('--data_dir', type=str, default=".data/sft", help="The name of the directory where data files are stored.")
     parser.add_argument('--ckpt_dir', type=str, default=".model/sft", help="The name of the directory to save checkpoints.")
     parser.add_argument('--model_id', type=str, required=True, help="The model ID of the pre-trained GPT-2 model in Hugging Face Hub.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
     parser.add_argument('--min_gen_len', type=int, default=100, help="The minumum number of tokens to generate, except for tags and EOS token.")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
-    parser.add_argument('--num_epochs', type=int, default=5, help="The number of epochs.")
+    parser.add_argument('--num_epochs', type=int, default=1, help="The number of epochs.")
     parser.add_argument('--learning_rate', type=float, default=1e-4, help="The learning rate.")
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help="The ratio of warm-up steps to the total training steps.")
 

@@ -101,7 +101,7 @@ def main(args: argparse.Namespace):
     print()
 
     # Save the data samples.
-    sft_data_dir = args.data_dir + "/supervised"
+    sft_data_dir = args.data_dir + "/sft"
     if not os.path.isdir(sft_data_dir):
         os.makedirs(sft_data_dir)
     with open(f"{sft_data_dir}/train_samples.json", 'w') as f:
@@ -109,7 +109,7 @@ def main(args: argparse.Namespace):
     with open(f"{sft_data_dir}/eval_samples.json", 'w') as f:
         json.dump(sft_eval_set, f)
 
-    rm_data_dir = args.data_dir + "/reward"
+    rm_data_dir = args.data_dir + "/rm"
     if not os.path.isdir(rm_data_dir):
         os.makedirs(rm_data_dir)
     with open(f"{rm_data_dir}/train_samples.json", 'w') as f:
