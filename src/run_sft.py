@@ -82,7 +82,7 @@ def _train(
         train_ppl = np.mean(train_ppls)
         print(f"Train loss: {train_loss} || Train perplexity: {train_ppl}")
 
-        valid_loss, valid_loss =_evaluate(model, eval_loader)
+        valid_loss, valid_ppl =_evaluate(model, eval_loader)
         if valid_loss < best_loss:
             best_loss = valid_loss
             print("Best validation loss updated. Checkpointing...")
@@ -91,7 +91,7 @@ def _train(
             model.save_pretrained(ckpt_path)
 
         print(f"Best valid loss: {best_loss}")
-        print(f"Valid loss: {valid_loss} || Valid perplexity: {valid_loss}")
+        print(f"Valid loss: {valid_loss} || Valid perplexity: {valid_ppl}")
         print()
 
 
