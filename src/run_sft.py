@@ -152,6 +152,7 @@ def main(args: argparse.Namespace):
     _train(
         args=args,
         model=model,
+        tokenizer=tokenizer,
         train_loader=train_loader,
         eval_loader=eval_loader,
         optimizer=optimizer,
