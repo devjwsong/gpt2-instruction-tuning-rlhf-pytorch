@@ -88,7 +88,7 @@ def _train(
             best_loss = valid_loss
             print("Best validation loss updated. Checkpointing...")
             model_name = args.model_id.split('/')[-1]
-            ckpt_path = f"{args.ckpt_dir}/{model_name}_sft_epoch={epoch}_loss={best_loss}"
+            ckpt_path = f"{args.ckpt_dir}/{model_name}_sft_epoch={epoch}_loss={best_loss:.4f}"
             model.save_pretrained(ckpt_path)
             tokenizer.save_pretrained(ckpt_path)
 
@@ -113,6 +113,7 @@ def main(args: argparse.Namespace):
     device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the tokenizer and model.
+    _fix_seed(args.seed)
     tokenizer = AutoTokenizer.from_pretrained(args.model_id)
     model = AutoModelForCausalLM.from_pretrained(args.model_id).to(device)
 
