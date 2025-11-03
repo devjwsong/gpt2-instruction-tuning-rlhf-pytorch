@@ -210,5 +210,6 @@ __marimo__/
 # Notebook files.
 *.ipynb
 
-# Data files.
+# Large files.
 .data
+.model
