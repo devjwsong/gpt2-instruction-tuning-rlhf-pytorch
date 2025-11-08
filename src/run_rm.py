@@ -81,7 +81,7 @@ def _train(
         if valid_loss < best_loss:
             best_loss = valid_loss
             print("Best validation loss updated. Checkpointing...")
-            model_name = args.sf_model_path.split('/')[-1].split('_')[0]
+            model_name = args.sft_model_path.split('/')[-1].split('_')[0]
             ckpt_path = f"{args.ckpt_dir}/{model_name}_rm_epoch={epoch}_loss={best_loss:.4f}"
             if not os.path.isdir(ckpt_path):
                 os.makedirs(ckpt_path)
@@ -110,9 +110,9 @@ def main(args: argparse.Namespace):
     device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the tokenizer and model.
-    tokenizer = AutoTokenizer.from_pretrained(args.sf_model_path)
+    tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
     model = RewardModel(
-        args.sf_model_path, 
+        args.sft_model_path, 
         reward_token_id=tokenizer.eos_token_id,
         max_reward=args.max_reward,
     ).to(device)
@@ -163,7 +163,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=42, help="The random seed.")
     parser.add_argument('--data_dir', type=str, default=".data/rm", help="The name of the directory where data files are stored.")
-    parser.add_argument('--sf_model_path', type=str, required=True, help="The checkpoint path of the supervised fine-tuned model.")
+    parser.add_argument('--sft_model_path', type=str, required=True, help="The checkpoint path of the supervised fine-tuned model.")
     parser.add_argument('--ckpt_dir', type=str, default=".model/sft", help="The name of the directory to save checkpoints.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
