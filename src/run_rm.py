@@ -27,7 +27,7 @@ def _evaluate(
             input_ids, labels = batch
             model_device = next(model.parameters()).device
             input_ids, labels = input_ids.to(model_device), labels.to(model_device)
-            preds = model(input_ids)
+            preds, _ = model(input_ids)
 
             loss = loss_func(preds, labels)  # ()
             valid_losses.append(loss.detach())
@@ -61,7 +61,7 @@ def _train(
             input_ids, labels = batch
             model_device = next(model.parameters()).device
             input_ids, labels = input_ids.to(model_device), labels.to(model_device)
-            preds = model(input_ids)
+            preds, _ = model(input_ids)
 
             loss = loss_func(preds, labels)  # ()
 
