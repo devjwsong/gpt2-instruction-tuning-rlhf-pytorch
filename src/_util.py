@@ -138,6 +138,40 @@ class RMPadCollate():
         labels = torch.FloatTensor(labels)
     
         return input_ids, labels
+    
+
+class QueryDataset(Dataset):
+    def __init__(self, 
+                 samples: List[Dict], 
+                 tokenizer: object,
+                 max_len: int=1024,
+                 min_gen_len: int=100
+    ):
+        self.input_ids = []  # (N ,L)
+
+        # Process each sample.
+        for sample in tqdm(samples):
+            sequence = ""
+            for input_key in ['name', 'summary', 'categories', 'genres']:
+                sequence += _format_tag(input_key, sample[input_key])
+            sequence_ids = tokenizer(sequence)['input_ids']
+
+            # Check the minimum generation requirement.
+            desc_start, desc_end = KEY2TAG['description']
+            desc_start_token_ids = tokenizer(desc_start)['input_ids']
+            desc_end_token_ids = tokenizer(desc_end)['input_ids']
+            cur_len = len(sequence_ids) + len(desc_start_token_ids) + len(desc_end_token_ids) + 1
+            if cur_len + min_gen_len > max_len:
+                continue
+
+            self.input_ids.append(sequence_ids + desc_start_token_ids)
+
+    def __len__(self) -> int:
+        return len(self.input_ids)
+    
+    def __getitem__(self, idx) -> List[int]:
+        return self.input_ids[idx]
+
 
 
 def _fix_seed(seed: int=0):
