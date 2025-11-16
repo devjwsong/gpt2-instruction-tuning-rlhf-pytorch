@@ -92,19 +92,18 @@ def _train(
             kl_divs = log_probs - ref_log_probs  # (B, L-1)
 
             # Mark the reward parts and set the per-token rewards/values.
+            query_lens = [len(query_ids) for query_ids in batch_set]  # (B)
+            query_lens = torch.LongTensor(query_lens).to(kl_divs.device)  # (B)
             rewards = args.beta * kl_divs  # (B, L-1)
             masks = torch.ones_like(rewards)  # (B, L-1)
-            for q in range(len(batch_set)):
-                query_ids = batch_set[q]
-                query_len = len(query_ids)
-                masks[q, query_len-1:] = 0.0
-                reward_loc = reward_locs[q].item()
-                masks[q, :reward_loc] = 0.0
-                final_reward = final_rewards[q].item()
-                rewards[q, reward_loc-1] += final_reward
+            seq_len = masks.shape[1]
+            seq_range = torch.arange(seq_len)
+            masks *= (seq_range >= (query_lens-1).unsqueeze(1)).long()
+            masks *= (seq_range < reward_locs.unsqueeze(1)).long()
 
             rewards *= masks
             values = values[:,:-1] * masks
+            rewards.scatter_add_(dim=1, index=(reward_locs-1).unsqueeze(1), src=final_rewards.unsqueeze(1))
 
             # Compute Advantage. (GAE)
             last_gae_lam = 0
