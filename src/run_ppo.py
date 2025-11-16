@@ -4,7 +4,7 @@ import argparse
 import json
 
 from model import RewardModel, PolicyWithValueHead
-from _util import KEY2TAG, QueryDataset
+from _util import KEY2TAG, QueryDataset, _masked_whitening
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
@@ -107,7 +107,15 @@ def _train(
 
             # Compute Advantage. (GAE)
             last_gae_lam = 0
-
+            advantage_reversed = []
+            for t in reversed(range(seq_len)):
+                next_values = values[:,t+1] if t < seq_len - 1 else 0.0  # (B)
+                deltas = rewards[:,t] + args.gamma * next_values - values[:,t]  # (B)
+                last_gae_lam = deltas + args.gamma * args.gae_lambda * last_gae_lam  # (B)
+                advantage_reversed.append(last_gae_lam)
+            advantages = torch.stack(advantage_reversed[::-1], dim=1)  # (B, L-1)
+            returns = advantages + values  # (B, L-1)
+            advantages = _masked_whitening(advantages, masks)
 
             # Inner training loop for PPO.
             for inner_epoch in range(1, args.num_inner_epochs+1):
@@ -186,7 +194,7 @@ if __name__=='__main__':
     parser.add_argument('--num_inner_epochs', type=int, default=5, help="The number of epochs. (Innter PPO loop)'")
     parser.add_argument('--infer_batch_size', type=int, default=16, help="The batch size of inference.")
     parser.add_argument('--beta', type=float, default=0.0, help="The coefficient for per-token KL divergence.")
-    parser.add_argument('--lambda', type=float, default=0.0, help="The delta value for GAE computation.")
+    parser.add_argument('--gae_lambda', type=float, default=0.0, help="The delta value for GAE computation.")
     parser.add_argument('--gamma', type=float, default=1.0, help="The discount factor for PPO.")
 
     args = parser.parse_args()
