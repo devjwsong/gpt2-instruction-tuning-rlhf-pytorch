@@ -63,6 +63,10 @@ def _train(
     **generation_kwargs
 ):
     print("[Training]")
+    # Copy the parameters to the reference policy. 
+    # This model is fixed into the one from SFT and never changes.
+    ref_policy = deepcopy(policy)
+    ref_policy.eval()
 
     for outer_epoch in range(1, args.num_outer_epochs+1):
         print(f"[Epoch {outer_epoch}]")
@@ -70,24 +74,20 @@ def _train(
         # Generate the outputs and get the rewards.
         print("Running interence using policy...")
         for b in range(0, len(train_query_set), args.infer_batch_size):
-            # Copy the parameters to the reference policy.
-            ref_policy = deepcopy(policy)
-
+            policy.eval()
             batch_set = train_query_set[b:b+args.infer_batch_size]
             full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L), (B, R_L, V)
             final_rewards, reward_locs = get_rewards(full_seqs, reward_model)  # (B), (B)
 
             # Compute per-token KL divergence.
             device = next(policy.parameters()).device
-            policy.eval()
-            ref_policy.eval()
             batch_seqs = pad_sequence(full_seqs, batch_first=True, padding_value=tokenizer.eos_token_id)  # (B, L)
             with torch.no_grad():
                 logits, values = policy(batch_seqs.to(device)).logits  # (B, L, V), (B, L)
                 ref_logits, _ = ref_policy(batch_seqs.to(device)).logits  # (B, L, V)
             log_probs = F.log_softmax(logits, dim=-1)  # (B, L, V)
             ref_log_probs = F.log_softmax(ref_logits, dim=-1)  # (B, L, V)
-            log_probs = torch.gather(log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1)
+            log_probs = torch.gather(log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1) => This is used for clipping loss!
             ref_log_probs = torch.gather(ref_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1),  # (B, L-1)
             kl_divs = log_probs - ref_log_probs  # (B, L-1)
 
@@ -118,6 +118,7 @@ def _train(
             advantages = _masked_whitening(advantages, masks)
 
             # Inner training loop for PPO.
+            policy.train()
             for inner_epoch in range(1, args.num_inner_epochs+1):
                 pass
 
