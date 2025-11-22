@@ -56,6 +56,26 @@ def get_rewards(full_seqs: List[torch.tensor], reward_model: RewardModel) -> Tup
     return rewards, reward_locs
 
 
+def get_advantages_by_gae(
+        rewards: torch.tensor, 
+        values: torch.tensor, 
+        masks: torch.tensor, 
+        seq_len: int=1024
+) -> Tuple[torch.tensor, torch.tensor]:
+    last_gae_lam = 0
+    advantage_reversed = []
+    for t in reversed(range(seq_len)):
+        next_values = values[:,t+1] if t < seq_len - 1 else 0.0  # (B)
+        deltas = rewards[:,t] + args.gamma * next_values - values[:,t]  # (B)
+        last_gae_lam = deltas + args.gamma * args.gae_lambda * last_gae_lam  # (B)
+        advantage_reversed.append(last_gae_lam)
+    advantages = torch.stack(advantage_reversed[::-1], dim=1)  # (B, L-1)
+    returns = advantages + values  # (B, L-1)
+    advantages = _masked_whitening(advantages, masks)
+
+    return advantages, returns
+
+
 def get_loss(
         pred_log_probs: torch.tensor, 
         pred_values: torch.tensor,
@@ -139,16 +159,7 @@ def _train(
 
             # Compute Advantage. (GAE)
             print("Performing GAE to finalize the advantage values...")
-            last_gae_lam = 0
-            advantage_reversed = []
-            for t in reversed(range(seq_len)):
-                next_values = values[:,t+1] if t < seq_len - 1 else 0.0  # (B)
-                deltas = rewards[:,t] + args.gamma * next_values - values[:,t]  # (B)
-                last_gae_lam = deltas + args.gamma * args.gae_lambda * last_gae_lam  # (B)
-                advantage_reversed.append(last_gae_lam)
-            advantages = torch.stack(advantage_reversed[::-1], dim=1)  # (B, L-1)
-            returns = advantages + values  # (B, L-1)
-            advantages = _masked_whitening(advantages, masks)
+            advantages, returns = get_advantages_by_gae(rewards, values, masks, seq_len=seq_len)  # (B, L-1), (B, L-1)
 
             # Inner training loop for PPO.
             print("Running PPO...")
