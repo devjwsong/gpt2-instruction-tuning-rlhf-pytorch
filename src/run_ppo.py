@@ -1,15 +1,18 @@
 from typing import List, Tuple
 from copy import deepcopy
+from tqdm import tqdm
 import argparse
 import json
 
 from model import RewardModel, PolicyWithValueHead
-from _util import KEY2TAG, QueryDataset, _masked_whitening
+from _util import KEY2TAG, QueryDataset, _masked_averaging, _masked_whitening
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
+from torch.optim import AdamW
 import torch
+import numpy as np
 
 
 def generate_by_policy(
@@ -53,6 +56,29 @@ def get_rewards(full_seqs: List[torch.tensor], reward_model: RewardModel) -> Tup
     return rewards, reward_locs
 
 
+def get_loss(
+        pred_log_probs: torch.tensor, 
+        pred_values: torch.tensor,
+        old_log_probs: torch.tensor,
+        returns: torch.tensor,
+        advantages: torch.tensor,
+        masks: torch.tensor,
+        epsilon: float=0.2,
+        value_loss_coeff: float=0.1
+) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+    # PPO loss by clipping.
+    ratios = torch.exp(pred_log_probs - old_log_probs)  # (B, L-1)
+    unclipped_part = ratios * advantages  # (B, L-1)
+    clipped_part = torch.clamp(ratios, 1-epsilon, 1+epsilon) * advantages  # (B, L-1)
+    ppo_loss = -1 * _masked_averaging(torch.min(unclipped_part, clipped_part), masks)  # ()
+    
+    # MSE loss for value function.
+    value_loss = _masked_averaging((pred_values[:, :-1] - returns) ** 2, masks)  # ()
+
+    loss = ppo_loss + value_loss_coeff * value_loss
+    return loss, ppo_loss, value_loss
+
+
 def _train(
     args: argparse.Namespace,
     policy: PolicyWithValueHead,
@@ -68,23 +94,29 @@ def _train(
     ref_policy = deepcopy(policy)
     ref_policy.eval()
 
+    optimizer = AdamW(policy.parameters(), lr=args.learning_rate)
+
     for outer_epoch in range(1, args.num_outer_epochs+1):
-        print(f"[Epoch {outer_epoch}]")
+        print(f"[Outer Epoch {outer_epoch}]")
+        outer_losses, outer_ppo_losses, outer_value_losses = [], [], []
 
         # Generate the outputs and get the rewards.
-        print("Running interence using policy...")
         for b in range(0, len(train_query_set), args.infer_batch_size):
+            print("Running inference using policy...")
             policy.eval()
             batch_set = train_query_set[b:b+args.infer_batch_size]
             full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L), (B, R_L, V)
+
+            print("Computing rewards by reward model...")
             final_rewards, reward_locs = get_rewards(full_seqs, reward_model)  # (B), (B)
 
             # Compute per-token KL divergence.
+            print("Computing per-token KL divergences...")
             device = next(policy.parameters()).device
             batch_seqs = pad_sequence(full_seqs, batch_first=True, padding_value=tokenizer.eos_token_id)  # (B, L)
             with torch.no_grad():
-                logits, values = policy(batch_seqs.to(device)).logits  # (B, L, V), (B, L)
-                ref_logits, _ = ref_policy(batch_seqs.to(device)).logits  # (B, L, V)
+                logits, values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
+                ref_logits, _ = ref_policy(batch_seqs.to(device))  # (B, L, V)
             log_probs = F.log_softmax(logits, dim=-1)  # (B, L, V)
             ref_log_probs = F.log_softmax(ref_logits, dim=-1)  # (B, L, V)
             log_probs = torch.gather(log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1) => This is used for clipping loss!
@@ -106,6 +138,7 @@ def _train(
             rewards.scatter_add_(dim=1, index=(reward_locs-1).unsqueeze(1), src=final_rewards.unsqueeze(1))
 
             # Compute Advantage. (GAE)
+            print("Performing GAE to finalize the advantage values...")
             last_gae_lam = 0
             advantage_reversed = []
             for t in reversed(range(seq_len)):
@@ -118,10 +151,52 @@ def _train(
             advantages = _masked_whitening(advantages, masks)
 
             # Inner training loop for PPO.
+            print("Running PPO...")
+            inner_losses, inner_ppo_losses, inner_value_losses = [], [], []
             policy.train()
-            for inner_epoch in range(1, args.num_inner_epochs+1):
-                pass
+            for inner_epoch in tqdm(range(1, args.num_inner_epochs+1)):
+                print(f"[Inner Epoch {outer_epoch}]")
+                pred_logits, pred_values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
+                pred_log_probs = F.log_softmax(pred_logits, dim=-1)  # (B, L, V)
+                pred_log_probs = torch.gather(pred_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1)
 
+                loss, ppo_loss, value_loss = get_loss(
+                    pred_log_probs, pred_values, log_probs, returns, advantages, masks,
+                    epsilon=args.epsilon,
+                    value_loss_coeff=args.value_loss_coeff
+                )
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                inner_losses.append(loss.item())
+                inner_ppo_losses.append(ppo_loss.item())
+                inner_value_losses.append(value_loss.item())
+                print(f"Loss: {loss.item()}")
+                print(f"PPO loss: {ppo_loss.item()}")
+                print(f"Value loss: {value_loss.item()}")
+
+            inner_loss = np.mean(inner_losses)
+            inner_ppo_loss = np.mean(inner_ppo_losses)
+            inner_value_loss = np.mean(inner_value_losses)
+
+            outer_losses.append(inner_loss)
+            outer_ppo_losses.append(inner_ppo_loss)
+            outer_value_losses.append(inner_value_loss)
+            print(f"[Training result from batch {b}]")
+            print(f"Loss: {inner_loss}")
+            print(f"PPO loss: {inner_ppo_loss}")
+            print(f"Value loss: {inner_value_loss}")
+            print()
+
+        outer_loss = np.mean(outer_losses)
+        outer_ppo_loss = np.mean(outer_ppo_losses)
+        outer_value_loss = np.mean(outer_value_losses)
+        print(f"[Training result from outer epoch {outer_epoch}]")
+        print(f"Loss: {outer_loss}")
+        print(f"PPO loss: {outer_ppo_loss}")
+        print(f"Value loss: {outer_value_loss}")
+        print()
 
 
 def main(args: argparse.Namespace):
@@ -194,9 +269,12 @@ if __name__=='__main__':
     parser.add_argument('--num_outer_epochs', type=int, default=3, help="The number of epochs. (Outer training loop)")
     parser.add_argument('--num_inner_epochs', type=int, default=5, help="The number of epochs. (Innter PPO loop)'")
     parser.add_argument('--infer_batch_size', type=int, default=16, help="The batch size of inference.")
+    parser.add_argument('--learning_rate', type=float, default=2e-5, help="The learning rate.")
     parser.add_argument('--beta', type=float, default=0.0, help="The coefficient for per-token KL divergence.")
     parser.add_argument('--gae_lambda', type=float, default=0.0, help="The delta value for GAE computation.")
     parser.add_argument('--gamma', type=float, default=1.0, help="The discount factor for PPO.")
+    parser.add_argument('--epsilon', type=float, default=0.2, help="The clipping value for PPO.")
+    parser.add_argument('--value_loss_coeff', type=float, default=0.1, help="The coefficient to apply the value loss.")
 
     args = parser.parse_args()
 

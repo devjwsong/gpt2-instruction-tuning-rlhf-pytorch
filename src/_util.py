@@ -181,8 +181,12 @@ def _fix_seed(seed: int=0):
     random.seed(seed)
 
 
+def _masked_averaging(values: torch.tensor, masks: torch.tensor):
+     return (values * masks).sum() / masks.sum()  # ()
+
+
 def _masked_whitening(values: torch.tensor, masks: torch.tensor, eps: float=1e-7) -> torch.tensor:
-    masked_means = (values * masks).sum() / masks.sum()  # ()
+    masked_means = _masked_averaging(values, masks)  # ()
     diffs = values - masked_means  # ()
     masked_vars = (diffs ** 2 * masks).sum() / masks.sum()  # ()
     return (values - masked_means) * torch.rsqrt(masked_vars + eps)  # (N, L)
