@@ -174,7 +174,7 @@ def _train(
                 print(f"[Inner Epoch {outer_epoch}]")
                 pred_logits, pred_values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
                 pred_log_probs = F.log_softmax(pred_logits, dim=-1)  # (B, L, V)
-                pred_log_probs = torch.gather(pred_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1)
+                pred_log_probs = torch.gather(pred_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:].unsqueeze(-1)).squeeze(-1)  # (B, L-1)
 
                 loss, ppo_loss, value_loss = get_loss(
                     pred_log_probs, pred_values, log_probs, returns, advantages, masks,
