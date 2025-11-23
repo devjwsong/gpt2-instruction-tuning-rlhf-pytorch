@@ -171,7 +171,7 @@ def _train(
             policy.train()
             for inner_epoch in range(1, args.num_inner_epochs+1):
                 print('-' * 100)
-                print(f"[Inner Epoch {outer_epoch}]")
+                print(f"[Inner Epoch {inner_epoch}]")
                 pred_logits, pred_values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
                 pred_log_probs = F.log_softmax(pred_logits, dim=-1)  # (B, L, V)
                 pred_log_probs = torch.gather(pred_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:].unsqueeze(-1)).squeeze(-1)  # (B, L-1)
