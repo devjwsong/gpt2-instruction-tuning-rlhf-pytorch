@@ -14,6 +14,7 @@ from torch.nn import functional as F
 from torch.optim import AdamW
 import torch
 import numpy as np
+import random
 
 
 def generate_by_policy(
@@ -259,6 +260,8 @@ def main(args: argparse.Namespace):
 
     # Set up the query datasets.
     print("[# of data samples after pre-processing]")
+    random.seed(args.seed)
+    random.shuffle(train_samples)
     train_query_set = QueryDataset(train_samples, tokenizer, args.max_len, args.min_gen_len)
     eval_query_set = QueryDataset(eval_samples, tokenizer, args.max_len, args.min_gen_len)
     print(f"{len(train_query_set)} samples processed from train set.")
