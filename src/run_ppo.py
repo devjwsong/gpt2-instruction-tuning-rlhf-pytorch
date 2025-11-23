@@ -154,7 +154,7 @@ def _train(
             rewards = args.beta * kl_divs  # (B, L-1)
             masks = torch.ones_like(rewards)  # (B, L-1)
             seq_len = masks.shape[1]
-            seq_range = torch.arange(seq_len)
+            seq_range = torch.arange(seq_len).to(query_lens.device)
             masks *= (seq_range >= (query_lens-1).unsqueeze(1)).long()
             masks *= (seq_range < reward_locs.unsqueeze(1)).long()
 
