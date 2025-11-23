@@ -77,7 +77,7 @@ class PolicyWithValueHead(nn.Module):
         # Get the last hidden state vectors.
         outputs = self.policy(input_ids, output_hidden_states=True)
         lm_logits = outputs.logits  # (B, L, V)
-        last_hidden_states = outputs.last_hidden_state  # (B, L, d)
+        last_hidden_states = outputs.hidden_states[-1]  # (B, L, d)
 
         # Apply the value head for all tokens.
         values = self.value_head(last_hidden_states)  # (B, L)

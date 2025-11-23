@@ -144,8 +144,8 @@ def _train(
                 ref_logits, _ = ref_policy(batch_seqs.to(device))  # (B, L, V)
             log_probs = F.log_softmax(logits, dim=-1)  # (B, L, V)
             ref_log_probs = F.log_softmax(ref_logits, dim=-1)  # (B, L, V)
-            log_probs = torch.gather(log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1)  # (B, L-1) => This is used for clipping loss!
-            ref_log_probs = torch.gather(ref_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:]).squeeze(-1),  # (B, L-1)
+            log_probs = torch.gather(log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:].unsqueeze(-1)).squeeze(-1)  # (B, L-1) => This is used for clipping loss!
+            ref_log_probs = torch.gather(ref_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:].unsqueeze(-1)).squeeze(-1)  # (B, L-1)
             kl_divs = log_probs - ref_log_probs  # (B, L-1)
 
             # Mark the reward parts and set the per-token rewards/values.
