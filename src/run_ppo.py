@@ -1,6 +1,5 @@
 from typing import List, Tuple
 from copy import deepcopy
-from tqdm import tqdm
 import argparse
 import json
 import os
@@ -8,7 +7,6 @@ import os
 from model import RewardModel, PolicyWithValueHead
 from _util import KEY2TAG, QueryDataset, _masked_averaging, _masked_whitening
 from transformers import AutoTokenizer
-from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
 from torch.optim import AdamW
@@ -25,7 +23,7 @@ def generate_by_policy(
 ) -> Tuple[List[torch.LongTensor], List[str]]:
     full_seqs, responses = [], []
     device = next(policy.parameters()).device
-    for q, query_ids in enumerate(tqdm(queries)):
+    for q, query_ids in enumerate(queries):
         output = policy.generate(
             torch.LongTensor(query_ids).unsqueeze(0).to(device), 
             **generation_kwargs
@@ -120,11 +118,12 @@ def _train(
 
     best_eval_reward = -1e+7
     for outer_epoch in range(1, args.num_outer_epochs+1):
+        print('#' * 100)
         print(f"[Outer Epoch {outer_epoch}]")
         outer_losses, outer_ppo_losses, outer_value_losses = [], [], []
 
         for b in range(0, len(train_query_set), args.batch_size):
-            print(f"Mini-batch: {b}")
+            print(f"Mini-batch: {b // args.batch_size}")
 
             # Generate the outputs and get the rewards.
             print("Running inference using policy...")
@@ -170,7 +169,8 @@ def _train(
             print("Running PPO...")
             inner_losses, inner_ppo_losses, inner_value_losses = [], [], []
             policy.train()
-            for inner_epoch in tqdm(range(1, args.num_inner_epochs+1)):
+            for inner_epoch in range(1, args.num_inner_epochs+1):
+                print('-' * 100)
                 print(f"[Inner Epoch {outer_epoch}]")
                 pred_logits, pred_values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
                 pred_log_probs = F.log_softmax(pred_logits, dim=-1)  # (B, L, V)
@@ -191,6 +191,7 @@ def _train(
                 print(f"Loss: {loss.item()}")
                 print(f"PPO loss: {ppo_loss.item()}")
                 print(f"Value loss: {value_loss.item()}")
+                print()
 
             inner_loss = np.mean(inner_losses)
             inner_ppo_loss = np.mean(inner_ppo_losses)
@@ -199,7 +200,7 @@ def _train(
             outer_losses.append(inner_loss)
             outer_ppo_losses.append(inner_ppo_loss)
             outer_value_losses.append(inner_value_loss)
-            print(f"[Training result from batch {b}]")
+            print(f"[Training result from batch {b // args.batch_size}]")
             print(f"Loss: {inner_loss}")
             print(f"PPO loss: {inner_ppo_loss}")
             print(f"Value loss: {inner_value_loss}")
@@ -235,6 +236,9 @@ def _train(
             
             torch.save(policy.state_dict(), ckpt_path + "/model.pth")
             tokenizer.save_pretrained(ckpt_path)
+        else:
+            print("No update after validation. Keep going...")
+        print()
 
 
 def main(args: argparse.Namespace):
