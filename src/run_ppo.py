@@ -22,14 +22,14 @@ def generate_by_policy(
     policy: PolicyWithValueHead,
     tokenizer: AutoTokenizer,
     **generation_kwargs
-) -> Tuple[List[List[int]], List[str]]:
+) -> Tuple[List[torch.LongTensor], List[str]]:
     full_seqs, responses = [], []
     device = next(policy.parameters()).device
     for q, query_ids in enumerate(tqdm(queries)):
         output = policy.generate(
             torch.LongTensor(query_ids).unsqueeze(0).to(device), 
             **generation_kwargs
-        ).squeeze(0).tolist() # (Q_L + R_L)
+        ).squeeze(0) # (Q_L + R_L)
         output[-1] = tokenizer.eos_token_id  # Set the last token as EOS by default for consistency.
         full_seqs.append(output)
 
@@ -124,6 +124,8 @@ def _train(
         outer_losses, outer_ppo_losses, outer_value_losses = [], [], []
 
         for b in range(0, len(train_query_set), args.batch_size):
+            print(f"Mini-batch: {b}")
+
             # Generate the outputs and get the rewards.
             print("Running inference using policy...")
             batch_set = train_query_set[b:b+args.batch_size]
