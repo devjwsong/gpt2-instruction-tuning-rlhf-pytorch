@@ -240,9 +240,9 @@ def main(args: argparse.Namespace):
     device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the models.
-    policy = PolicyWithValueHead(args.sft_model_path).to(args.device)
+    policy = PolicyWithValueHead(args.sft_model_path).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
-    reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id, args.max_reward).to(args.device)
+    reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id, args.max_reward).to(device)
     state_dict = torch.load(f"{args.rm_model_path}/model.pth")
     reward_model.load_state_dict(state_dict)
     reward_model = reward_model.to(device)

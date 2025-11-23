@@ -69,13 +69,13 @@ class PolicyWithValueHead(nn.Module):
 
         # The policy is a causal LM same as SFT model.
         self.policy = AutoModelForCausalLM.from_pretrained(sf_model_path)
-        self.value_head = ValueHead(self.model.config.n_embd)
+        self.value_head = ValueHead(self.policy.config.n_embd)
 
     def forward(self, input_ids: torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
         # input_ids: (B, L)
 
         # Get the last hidden state vectors.
-        outputs = self.model(input_ids, output_hidden_states=True)
+        outputs = self.policy(input_ids, output_hidden_states=True)
         lm_logits = outputs.logits  # (B, L, V)
         last_hidden_states = outputs.last_hidden_state  # (B, L, d)
 
