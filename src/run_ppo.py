@@ -5,7 +5,7 @@ import json
 import os
 
 from model import RewardModel, PolicyWithValueHead
-from _util import KEY2TAG, QueryDataset, _masked_averaging, _masked_whitening
+from _util import KEY2TAG, _fix_seed, QueryDataset, _masked_averaging, _masked_whitening
 from transformers import AutoTokenizer
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
@@ -246,6 +246,7 @@ def main(args: argparse.Namespace):
     device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the models.
+    _fix_seed(args.seed)
     policy = PolicyWithValueHead(args.sft_model_path).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
     reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id, args.max_reward).to(device)
@@ -266,7 +267,7 @@ def main(args: argparse.Namespace):
 
     # Set up the query datasets.
     print("[# of data samples after pre-processing]")
-    random.seed(args.seed)
+    _fix_seed(args.seed)
     random.shuffle(train_samples)
     train_query_set = QueryDataset(train_samples, tokenizer, args.max_len, args.min_gen_len)
     eval_query_set = QueryDataset(eval_samples, tokenizer, args.max_len, args.min_gen_len)
