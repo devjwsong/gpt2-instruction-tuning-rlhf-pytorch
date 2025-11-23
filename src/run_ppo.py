@@ -3,6 +3,7 @@ from copy import deepcopy
 from tqdm import tqdm
 import argparse
 import json
+import os
 
 from model import RewardModel, PolicyWithValueHead
 from _util import KEY2TAG, QueryDataset, _masked_averaging, _masked_whitening
@@ -116,16 +117,16 @@ def _train(
 
     optimizer = AdamW(policy.parameters(), lr=args.learning_rate)
 
+    best_eval_reward = -1e+7
     for outer_epoch in range(1, args.num_outer_epochs+1):
         print(f"[Outer Epoch {outer_epoch}]")
         outer_losses, outer_ppo_losses, outer_value_losses = [], [], []
 
-        # Generate the outputs and get the rewards.
-        for b in range(0, len(train_query_set), args.infer_batch_size):
+        for b in range(0, len(train_query_set), args.batch_size):
+            # Generate the outputs and get the rewards.
             print("Running inference using policy...")
-            policy.eval()
-            batch_set = train_query_set[b:b+args.infer_batch_size]
-            full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L), (B, R_L, V)
+            batch_set = train_query_set[b:b+args.batch_size]
+            full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
 
             print("Computing rewards by reward model...")
             final_rewards, reward_locs = get_rewards(full_seqs, reward_model)  # (B), (B)
@@ -133,6 +134,7 @@ def _train(
             # Compute per-token KL divergence.
             print("Computing per-token KL divergences...")
             device = next(policy.parameters()).device
+            policy.eval()
             batch_seqs = pad_sequence(full_seqs, batch_first=True, padding_value=tokenizer.eos_token_id)  # (B, L)
             with torch.no_grad():
                 logits, values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
@@ -209,6 +211,28 @@ def _train(
         print(f"Value loss: {outer_value_loss}")
         print()
 
+        # Validation.
+        print("Running validation...")
+        eval_rewards = []
+        for b in range(0, len(eval_query_set), args.batch_size):
+            # Generate the outputs and get the rewards.
+            batch_set = eval_query_set[b:b+args.batch_size]
+            full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
+            final_rewards, _ = get_rewards(full_seqs, reward_model)  # (B)
+            eval_rewards += final_rewards.tolist()
+
+        eval_reward = np.mean(eval_rewards)
+        if eval_reward > best_eval_reward:
+            best_eval_reward = eval_reward
+            print("Best validation reward updated. Checkpointing...")
+            model_name = args.sft_model_path.split('/')[-1].split('_')[0]
+            ckpt_path = f"{args.ckpt_dir}/{model_name}_ppo_epoch={outer_epoch}_reward={best_eval_reward:.2f}"
+            if not os.path.isdir(ckpt_path):
+                os.makedirs(ckpt_path)
+            
+            torch.save(policy.state_dict(), ckpt_path + "/model.pth")
+            tokenizer.save_pretrained(ckpt_path)
+
 
 def main(args: argparse.Namespace):
     # Set the GPU.
@@ -260,7 +284,7 @@ def main(args: argparse.Namespace):
         eval_query_set=eval_query_set,
         **generation_kwargs
     )
-
+    print("DONE.")
 
 
 if __name__=='__main__':
@@ -279,7 +303,7 @@ if __name__=='__main__':
     parser.add_argument('--top_p', type=float, default=1.0, help=" Only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation.")
     parser.add_argument('--num_outer_epochs', type=int, default=3, help="The number of epochs. (Outer training loop)")
     parser.add_argument('--num_inner_epochs', type=int, default=5, help="The number of epochs. (Innter PPO loop)'")
-    parser.add_argument('--infer_batch_size', type=int, default=16, help="The batch size of inference.")
+    parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--learning_rate', type=float, default=2e-5, help="The learning rate.")
     parser.add_argument('--beta', type=float, default=0.0, help="The coefficient for per-token KL divergence.")
     parser.add_argument('--gae_lambda', type=float, default=0.0, help="The delta value for GAE computation.")
