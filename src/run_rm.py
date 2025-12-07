@@ -172,7 +172,7 @@ if __name__=='__main__':
     parser.add_argument('--num_epochs', type=int, default=1, help="The number of epochs.")
     parser.add_argument('--learning_rate', type=float, default=1e-4, help="The learning rate.")
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help="The ratio of warm-up steps to the total training steps.")
-    parser.add_argument('--max_reward', type=float, default=1.0, help="The maximum reward value. The reward range is set to [-max, max].")
+    parser.add_argument('--max_reward', type=float, default=1.0, help="The maximum reward value. The reward range is set to [1.0, max].")
 
     args = parser.parse_args()
 
