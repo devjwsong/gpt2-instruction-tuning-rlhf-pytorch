@@ -138,7 +138,7 @@ def main(args: argparse.Namespace):
     num_batches = len(train_loader)
     total_train_steps = args.num_epochs * num_batches
     warmup_steps = int(args.warmup_ratio * total_train_steps)
-    optimizer = AdamW(model.parameters())
+    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     scheduler = get_polynomial_decay_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
