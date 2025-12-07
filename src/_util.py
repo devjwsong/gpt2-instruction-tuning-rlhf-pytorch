@@ -78,32 +78,37 @@ class RMDataset(Dataset):
         self.input_ids = []  # (N ,L)
         self.labels = []  # (N)
 
+        # Find the current max scores.
+        default_max_score = 0.0
+        for sample in samples:
+            default_max_score = max(default_max_score, sample['score'])
+
         # Process each sample.
         for sample in tqdm(samples):
-            sequence = ""
-            for input_key in ['name', 'summary', 'categories', 'genres']:
-                sequence += _format_tag(input_key, sample[input_key])
+            inst_start, inst_end = KEY2TAG['instruction']
+            sequence = inst_start + sample['instruction'] + inst_end
             sequence_ids = tokenizer(sequence)['input_ids']
 
-            # Check the minimum target requirement.
-            desc_start, desc_end = KEY2TAG['description']
-            desc_start_token_ids = tokenizer(desc_start)['input_ids']
-            desc_end_token_ids = tokenizer(desc_end)['input_ids']
-            cur_len = len(sequence_ids) + len(desc_start_token_ids) + len(desc_end_token_ids) + 1
+            # Check the minimum generation requirement.
+            resp_start, resp_end = KEY2TAG['response']
+            resp_start_token_ids = tokenizer(resp_start)['input_ids']
+            resp_end_token_ids = tokenizer(resp_end)['input_ids']
+            cur_len = len(sequence_ids) + len(resp_start_token_ids) + len(resp_end_token_ids) + 1
             if cur_len + min_target_len > max_len:
                 continue
 
             # Append the target.
-            sequence_ids += desc_start_token_ids
-            desc_token_ids = tokenizer(sample['description'])['input_ids']
-            gen_len = max_len - 1 - len(desc_end_token_ids) - len(sequence_ids)
-            desc_token_ids = desc_token_ids[:gen_len]
-            self.input_ids.append(sequence_ids + desc_token_ids + desc_end_token_ids + [tokenizer.eos_token_id])
+            sequence_ids += resp_start_token_ids
+            resp_token_ids = tokenizer(sample['response'])['input_ids']
+            gen_len = max_len - 1 - len(resp_end_token_ids) - len(sequence_ids)
+            resp_token_ids = resp_token_ids[:gen_len]
+            self.input_ids.append(sequence_ids + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
 
             # Normalize & Add label.
-            positive, negative = sample['positive'], sample['negative']
-            score = torch.sigmoid(torch.IntTensor([positive - negative])).item()
-            self.labels.append(2 * max_score * score - max_score)
+            score = sample['score']
+            if default_max_score > 1.0:
+                score = 1.0 + (score - 1.0) * ((max_score - 1.0) / (default_max_score - 1.0))
+            self.labels.append(score)
 
     def __len__(self) -> int:
         return len(self.input_ids)

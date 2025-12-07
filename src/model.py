@@ -60,7 +60,7 @@ class RewardModel(nn.Module):
 
         # Reward normalization.
         rewards = torch.sigmoid(rewards)  # (B)
-        return 2 * self.max_reward * rewards - self.max_reward, reward_locs  # Set the range into [-max, max].
+        return 1.0 + (self.max_reward - 1) * rewards, reward_locs  # Set the range into [1.0 - max_reward].
     
 
 class PolicyWithValueHead(nn.Module):
