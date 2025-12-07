@@ -7,20 +7,9 @@ import numpy as np
 import torch
 
 KEY2TAG = {
-    'name': ("<name>", "</name>"),
-    'summary': ("<summary>", ("</summary>")),
-    'categories': ("<categories>", "</categories>"),
-    'genres': ("<genres>", "</genres>"),
-    'description': ("<description>", "</description>") 
+    'instruction': ("<instruction>", "</instruction>"),
+    'response': ("<response>", "</response>")
 }
-
-
-def _format_tag(k: str, v: Union[str, List[str]]) -> str:
-    start, end = KEY2TAG[k]
-    if isinstance(v, str):
-        return start + v + end
-    
-    return start + ', '.join(v) + end
 
 
 class SFTDataset(Dataset):
@@ -35,26 +24,25 @@ class SFTDataset(Dataset):
 
         # Process each sample.
         for sample in tqdm(samples):
-            sequence = ""
-            for input_key in ['name', 'summary', 'categories', 'genres']:
-                sequence += _format_tag(input_key, sample[input_key])
+            inst_start, inst_end = KEY2TAG['instruction']
+            sequence = inst_start + sample['instruction'] + inst_end
             sequence_ids = tokenizer(sequence)['input_ids']
 
             # Check the minimum generation requirement.
-            desc_start, desc_end = KEY2TAG['description']
-            desc_start_token_ids = tokenizer(desc_start)['input_ids']
-            desc_end_token_ids = tokenizer(desc_end)['input_ids']
-            cur_len = len(sequence_ids) + len(desc_start_token_ids) + len(desc_end_token_ids) + 1
+            resp_start, resp_end = KEY2TAG['response']
+            resp_start_token_ids = tokenizer(resp_start)['input_ids']
+            resp_end_token_ids = tokenizer(resp_end)['input_ids']
+            cur_len = len(sequence_ids) + len(resp_start_token_ids) + len(resp_end_token_ids) + 1
             if cur_len + min_gen_len > max_len:
                 continue
 
             # Append the label.
-            sequence_ids += desc_start_token_ids
-            desc_token_ids = tokenizer(sample['description'])['input_ids']
-            gen_len = max_len - 1 - len(desc_end_token_ids) - len(sequence_ids)
-            desc_token_ids = desc_token_ids[:gen_len]
-            self.input_ids.append(sequence_ids + desc_token_ids + desc_end_token_ids + [tokenizer.eos_token_id])
-            self.labels.append([-100] * len(sequence_ids) + desc_token_ids + desc_end_token_ids + [tokenizer.eos_token_id])
+            sequence_ids += resp_start_token_ids
+            resp_token_ids = tokenizer(sample['response'])['input_ids']
+            gen_len = max_len - 1 - len(resp_end_token_ids) - len(sequence_ids)
+            resp_token_ids = resp_token_ids[:gen_len]
+            self.input_ids.append(sequence_ids + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
+            self.labels.append([-100] * len(sequence_ids) + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
 
     def __len__(self) -> int:
         return len(self.input_ids)

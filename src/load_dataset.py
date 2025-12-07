@@ -3,12 +3,10 @@ import json
 import argparse
 import random
 import os
-import math
 
 from tqdm import tqdm
 from langdetect import detect
 from datasets import load_dataset
-import numpy as np
 
 DATASET_PATH = "openbmb/UltraFeedback"
 NUM_BINS = 10
