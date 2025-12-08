@@ -33,10 +33,10 @@ def generate_by_policy(
 
         # Extract the natural language response.
         generated = output[len(query_ids):-1]  # Remove query and EOS token part.
-        _, desc_end = KEY2TAG['description']
-        desc_end_token_ids = tokenizer(desc_end)['input_ids']
-        if generated[len(generated)-len(desc_end_token_ids):] == desc_end_token_ids:
-            generated = generated[:-len(desc_end_token_ids)]  # Remove </description> if it is included.
+        _, resp_end = KEY2TAG['response']
+        resp_end_token_ids = tokenizer(resp_end)['input_ids']
+        if generated[len(generated)-len(resp_end_token_ids):] == resp_end_token_ids:
+            generated = generated[:-len(resp_end_token_ids)]  # Remove </description> if it is included.
         response = tokenizer.decode(generated)
         responses.append(response)
 
@@ -275,11 +275,11 @@ def main(args: argparse.Namespace):
     print(f"{len(eval_query_set)} samples processed from eval set.")
 
     #  Training loop.
-    _, desc_end = KEY2TAG['description']
-    desc_end_token_ids = tokenizer(desc_end)['input_ids']
+    _, resp_end = KEY2TAG['response']
+    resp_end_token_ids = tokenizer(resp_end)['input_ids']
     generation_kwargs = {
         'max_length': args.max_len,
-        'min_new_tokens': args.min_gen_len + len(desc_end_token_ids) + 1,
+        'min_new_tokens': args.min_gen_len + len(resp_end_token_ids) + 1,
         'do_sample': args.do_sample,
         'temperature': args.temperature,
         'top_k': args.top_k,

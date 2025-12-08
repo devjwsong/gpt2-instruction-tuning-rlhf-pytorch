@@ -144,20 +144,19 @@ class QueryDataset(Dataset):
 
         # Process each sample.
         for sample in tqdm(samples):
-            sequence = ""
-            for input_key in ['name', 'summary', 'categories', 'genres']:
-                sequence += _format_tag(input_key, sample[input_key])
+            inst_start, inst_end = KEY2TAG['instruction']
+            sequence = inst_start + sample['instruction'] + inst_end
             sequence_ids = tokenizer(sequence)['input_ids']
 
             # Check the minimum generation requirement.
-            desc_start, desc_end = KEY2TAG['description']
-            desc_start_token_ids = tokenizer(desc_start)['input_ids']
-            desc_end_token_ids = tokenizer(desc_end)['input_ids']
-            cur_len = len(sequence_ids) + len(desc_start_token_ids) + len(desc_end_token_ids) + 1
+            resp_start, resp_end = KEY2TAG['response']
+            resp_start_token_ids = tokenizer(resp_start)['input_ids']
+            resp_end_token_ids = tokenizer(resp_end)['input_ids']
+            cur_len = len(sequence_ids) + len(resp_start_token_ids) + len(resp_end_token_ids) + 1
             if cur_len + min_gen_len > max_len:
                 continue
 
-            self.input_ids.append(sequence_ids + desc_start_token_ids)
+            self.input_ids.append(sequence_ids + resp_start_token_ids)
 
     def __len__(self) -> int:
         return len(self.input_ids)
