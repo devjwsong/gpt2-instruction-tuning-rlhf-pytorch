@@ -70,7 +70,7 @@ def get_advantages_by_gae(
         last_gae_lam = deltas + args.gamma * args.gae_lambda * last_gae_lam  # (B)
         advantage_reversed.append(last_gae_lam)
     advantages = torch.stack(advantage_reversed[::-1], dim=1)  # (B, L-1)
-    returns = advantages + values  # (B, L-1)
+    returns = advantages + values[:,:-1]  # (B, L-1)
     advantages = _masked_whitening(advantages, masks)
 
     return advantages, returns
@@ -150,7 +150,7 @@ def _train(
             # Mark the reward parts and set the per-token rewards/values.
             query_lens = [len(query_ids) for query_ids in batch_set]  # (B)
             query_lens = torch.LongTensor(query_lens).to(kl_divs.device)  # (B)
-            rewards = args.beta * kl_divs  # (B, L-1)
+            rewards = -1 * args.beta * kl_divs  # (B, L-1)
             masks = torch.ones_like(rewards)  # (B, L-1)
             seq_len = masks.shape[1]
             seq_range = torch.arange(seq_len).to(query_lens.device)
@@ -158,7 +158,6 @@ def _train(
             masks *= (seq_range < reward_locs.unsqueeze(1)).long()
 
             rewards *= masks
-            values = values[:,:-1] * masks
             rewards.scatter_add_(dim=1, index=(reward_locs-1).unsqueeze(1), src=final_rewards.unsqueeze(1))
 
             # Compute Advantage. (GAE)
