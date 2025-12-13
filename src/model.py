@@ -17,10 +17,11 @@ class RewardHead(nn.Module):
 
 
 class ValueHead(nn.Module):
-    def __init__(self, hidden_size: int):
+    def __init__(self, hidden_size: int, init_bias: float=3.0):
         super().__init__()
         self.value_layer = nn.Linear(hidden_size, 1)
         nn.init.xavier_normal_(self.value_layer.weight)
+        self.value_layer.bias.data.fill_(init_bias)
 
     def forward(self, last_hidden_states: torch.tensor) -> torch.tensor:
         # last_hidden_states: (B, L, d)
@@ -64,12 +65,12 @@ class RewardModel(nn.Module):
     
 
 class PolicyWithValueHead(nn.Module):
-    def __init__(self, sf_model_path: str):
+    def __init__(self, sf_model_path: str, init_bias: float=3.0):
         super().__init__()
 
         # The policy is a causal LM same as SFT model.
         self.policy = AutoModelForCausalLM.from_pretrained(sf_model_path)
-        self.value_head = ValueHead(self.policy.config.n_embd)
+        self.value_head = ValueHead(self.policy.config.n_embd, init_bias)
 
     def forward(self, input_ids: torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
         # input_ids: (B, L)

@@ -150,7 +150,7 @@ def _train(
             # Mark the reward parts and set the per-token rewards/values.
             query_lens = [len(query_ids) for query_ids in batch_set]  # (B)
             query_lens = torch.LongTensor(query_lens).to(kl_divs.device)  # (B)
-            rewards = -1 * args.beta * kl_divs  # (B, L-1)
+            rewards = -1 * args.beta * torch.clamp(kl_divs, min=0, max=args.max_kl_div)  # (B, L-1)
             masks = torch.ones_like(rewards)  # (B, L-1)
             seq_len = masks.shape[1]
             seq_range = torch.arange(seq_len).to(query_lens.device)
@@ -182,6 +182,7 @@ def _train(
                 )
                 optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=args.max_gradient_norm)
                 optimizer.step()
 
                 inner_losses.append(loss.item())
@@ -246,7 +247,8 @@ def main(args: argparse.Namespace):
 
     # Load the models.
     _fix_seed(args.seed)
-    policy = PolicyWithValueHead(args.sft_model_path).to(device)
+    init_bias = (1.0 + args.max_reward) / 2  # Set the bias of value head to be in the middle of reward range.
+    policy = PolicyWithValueHead(args.sft_model_path, init_bias).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
     reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id, args.max_reward).to(device)
     state_dict = torch.load(f"{args.rm_model_path}/model.pth")
@@ -314,7 +316,9 @@ if __name__=='__main__':
     parser.add_argument('--num_inner_epochs', type=int, default=5, help="The number of epochs. (Innter PPO loop)'")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--learning_rate', type=float, default=2e-5, help="The learning rate.")
+    parser.add_argument('--max_gradient_norm', type=float, default=1.0, help="The maximum value for gradient clipping.")
     parser.add_argument('--beta', type=float, default=0.0, help="The coefficient for per-token KL divergence.")
+    parser.add_argument('--max_kl_div', type=float, default=10.0, help="The maximum KL divergence value for clampping.")
     parser.add_argument('--gae_lambda', type=float, default=0.0, help="The delta value for GAE computation.")
     parser.add_argument('--gamma', type=float, default=1.0, help="The discount factor for PPO.")
     parser.add_argument('--epsilon', type=float, default=0.2, help="The clipping value for PPO.")
