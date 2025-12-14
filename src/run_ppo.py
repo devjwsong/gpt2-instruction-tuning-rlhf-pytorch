@@ -35,7 +35,7 @@ def generate_by_policy(
         generated = output[len(query_ids):-1]  # Remove query and EOS token part.
         _, resp_end = KEY2TAG['response']
         resp_end_token_ids = tokenizer(resp_end)['input_ids']
-        if generated[len(generated)-len(resp_end_token_ids):] == resp_end_token_ids:
+        if generated[len(generated)-len(resp_end_token_ids):].tolist() == resp_end_token_ids:
             generated = generated[:-len(resp_end_token_ids)]  # Remove </description> if it is included.
         response = tokenizer.decode(generated)
         responses.append(response)
