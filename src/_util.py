@@ -177,7 +177,7 @@ def _masked_averaging(values: torch.tensor, masks: torch.tensor):
      return (values * masks).sum() / masks.sum()  # ()
 
 
-def _masked_whitening(values: torch.tensor, masks: torch.tensor, eps: float=1e-7) -> torch.tensor:
+def _masked_whitening(values: torch.tensor, masks: torch.tensor, eps: float=1e-5) -> torch.tensor:
     masked_means = _masked_averaging(values, masks)  # ()
     diffs = values - masked_means  # ()
     masked_vars = (diffs ** 2 * masks).sum() / masks.sum()  # ()
