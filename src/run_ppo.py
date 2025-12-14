@@ -303,6 +303,7 @@ if __name__=='__main__':
     parser.add_argument('--seed', type=int, default=42, help="The random seed.")
     parser.add_argument('--sft_model_path', type=str, required=True, help="The checkpoint path of the supervised fine-tuned model.")
     parser.add_argument('--rm_model_path', type=str, required=True, help="The checkpoint path of the reward model.")
+    parser.add_argument('--ckpt_dir', type=str, default=".model/ppo", help="The name of the directory to save checkpoints.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
     parser.add_argument('--max_reward', type=float, default=1.0, help="The maximum reward value. The reward range is set to [-max, max].")
     parser.add_argument('--data_dir', type=str, default=".data/ppo", help="The name of the directory where data files are stored.")
