@@ -36,16 +36,13 @@ def _get_pairs(split: List[Dict]):
         instruction = sample['instruction']
         annotations = sample['annotations']
         annotations = sorted(annotations, key=lambda x:x['score'], reverse=True)
-        interval = (len(annotations) + 1) // 2
-
-        for i in range(0, len(annotations)):
-            if i+interval < len(annotations):
-                preferred, not_preferred = annotations[i], annotations[i+interval]
-                paired_split.append({
-                    'instruction': instruction,
-                    'preferred': preferred,
-                    'not_preferred': not_preferred
-                })
+        preferred, not_preferred = annotations[0], annotations[-1]
+        if preferred['score'] > not_preferred['score']:
+            paired_split.append({
+                'instruction': instruction,
+                'preferred': preferred,
+                'not_preferred': not_preferred
+            })
 
     return paired_split
 
@@ -98,8 +95,7 @@ def main(args: argparse.Namespace):
     print("Random sampling & Splitting...")
     sft_train_set, sft_eval_set = [], []
     rm_train_set, rm_eval_set = [], []
-    ppo_train_set, ppo_eval_set = [], []
-    dpo_train_set, dpo_eval_set = [], []
+    pref_train_set, pref_eval_set = [], []
     random.seed(args.seed)
     for source, samples in source2samples.items():
         print(f"Processing source: {source}...")
@@ -117,12 +113,10 @@ def main(args: argparse.Namespace):
         sft_eval_set += _flatten_split(sft_eval_split)
         rm_train_set += _flatten_split(rm_train_split)
         rm_eval_set += _flatten_split(rm_eval_split)
-        ppo_train_set += _flatten_split(rlhf_train_split)
-        ppo_eval_set += _flatten_split(rlhf_eval_split)
 
-        # Make paired datasets for DPO.
-        dpo_train_set += _get_pairs(rlhf_train_split)
-        dpo_eval_set += _get_pairs(rlhf_eval_split)
+        # Make paired datasets for DPO and PPO. PPO only uses the queries.
+        pref_train_set += _get_pairs(rlhf_train_split)
+        pref_eval_set += _get_pairs(rlhf_eval_split)
 
     print(f"[Supervised Fine-Tuning]")
     print(f"Total: {len(sft_train_set) + len(sft_eval_set)}")
@@ -136,16 +130,10 @@ def main(args: argparse.Namespace):
     print(f"Eval: {len(rm_eval_set)}")
     print()
 
-    print(f"[PPO: Proximal Policy Optimization]")
-    print(f"Total: {len(ppo_train_set) + len(ppo_eval_set)}")
-    print(f"Train: {len(ppo_train_set)}")
-    print(f"Eval: {len(ppo_eval_set)}")
-    print()
-
-    print(f"[DPO: Direct Preference Optimization]")
-    print(f"Total: {len(dpo_train_set) + len(dpo_eval_set)} pairs")
-    print(f"Train: {len(dpo_train_set)} pairs")
-    print(f"Eval: {len(dpo_eval_set)} pairs")
+    print(f"[PPO: Proximal Policy Optimization & DPO: Direct Preference Optimization]")
+    print(f"Total: {len(pref_train_set) + len(pref_eval_set)}")
+    print(f"Train: {len(pref_train_set)}")
+    print(f"Eval: {len(pref_eval_set)}")
     print()
 
     # Save the data samples.
@@ -165,21 +153,13 @@ def main(args: argparse.Namespace):
     with open(f"{rm_data_dir}/eval_samples.json", 'w') as f:
         json.dump(rm_eval_set, f)
 
-    ppo_data_dir = args.data_dir + "/ppo"
-    if not os.path.isdir(ppo_data_dir):
-        os.makedirs(ppo_data_dir)
-    with open(f"{ppo_data_dir}/train_samples.json", 'w') as f:
-        json.dump(ppo_train_set, f)
-    with open(f"{ppo_data_dir}/eval_samples.json", 'w') as f:
-        json.dump(ppo_eval_set, f)
-
-    dpo_data_dir = args.data_dir + "/dpo"
-    if not os.path.isdir(dpo_data_dir):
-        os.makedirs(dpo_data_dir)
-    with open(f"{dpo_data_dir}/train_samples.json", 'w') as f:
-        json.dump(dpo_train_set, f)
-    with open(f"{dpo_data_dir}/eval_samples.json", 'w') as f:
-        json.dump(dpo_eval_set, f)
+    pref_data_dir = args.data_dir + "/pref"
+    if not os.path.isdir(pref_data_dir):
+        os.makedirs(pref_data_dir)
+    with open(f"{pref_data_dir}/train_samples.json", 'w') as f:
+        json.dump(pref_train_set, f)
+    with open(f"{pref_data_dir}/eval_samples.json", 'w') as f:
+        json.dump(pref_eval_set, f)
 
     print("Data loading done.")
 
@@ -188,8 +168,8 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=42, help="The random seed.")
     parser.add_argument('--data_dir', type=str, default=".data", help="The name of the parent directory where data files are stored.")
-    parser.add_argument('--sft_ratio', type=float, default=0.2, help="The ratio of the data samples for supervised fine-tuning.")
-    parser.add_argument('--rm_ratio', type=float, default=0.2, help="The ratio of the data samples for reward model training.")
+    parser.add_argument('--sft_ratio', type=float, default=0.1, help="The ratio of the data samples for supervised fine-tuning.")
+    parser.add_argument('--rm_ratio', type=float, default=0.1, help="The ratio of the data samples for reward model training.")
     parser.add_argument('--train_ratio', type=float, default=0.8, help="The ratio of the data samples for train set.")
               
     args = parser.parse_args()
