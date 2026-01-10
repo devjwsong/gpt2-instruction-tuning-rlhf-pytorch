@@ -128,7 +128,9 @@ def _train(
             # Generate the outputs and get the rewards.
             print("Running inference using policy...")
             batch_set = train_query_set[b:b+args.batch_size]
-            full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
+            policy.eval()
+            with torch.no_grad():
+                full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
 
             print("Computing rewards by reward model...")
             final_rewards, reward_locs = get_rewards(full_seqs, reward_model)  # (B), (B)
@@ -136,7 +138,6 @@ def _train(
             # Compute per-token KL divergence.
             print("Computing per-token KL divergences...")
             device = next(policy.parameters()).device
-            policy.eval()
             batch_seqs = pad_sequence(full_seqs, batch_first=True, padding_value=tokenizer.eos_token_id)  # (B, L)
             with torch.no_grad():
                 logits, values = policy(batch_seqs.to(device))  # (B, L, V), (B, L)
