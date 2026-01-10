@@ -309,7 +309,7 @@ if __name__=='__main__':
     parser.add_argument('--max_reward', type=float, default=1.0, help="The maximum reward value. The reward range is set to [-max, max].")
     parser.add_argument('--data_dir', type=str, default=".data/ppo", help="The name of the directory where data files are stored.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
-    parser.add_argument('--min_gen_len', type=int, default=100, help="The minumum number of tokens to generate, except for tags and EOS token.")
+    parser.add_argument('--min_gen_len', type=int, default=1, help="The minumum number of tokens to generate, except for tags and EOS token.")
     parser.add_argument('--do_sample', action='store_true', help="Whether or not to use sampling.")
     parser.add_argument('--temperature', type=float, default=1.0, help="The temperature value to control diversity during generation.")
     parser.add_argument('--top_k', type=int, default=50, help="The number of highest probability vocabulary tokens to keep for top-k-filtering.")

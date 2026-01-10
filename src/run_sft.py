@@ -170,7 +170,7 @@ if __name__=='__main__':
     parser.add_argument('--model_id', type=str, required=True, help="The model ID of the pre-trained GPT-2 model in Hugging Face Hub.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
-    parser.add_argument('--min_gen_len', type=int, default=100, help="The minumum number of tokens to generate, except for tags and EOS token.")
+    parser.add_argument('--min_gen_len', type=int, default=1, help="The minumum number of tokens to generate, except for tags and EOS token.")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--num_epochs', type=int, default=1, help="The number of epochs.")
     parser.add_argument('--learning_rate', type=float, default=1e-4, help="The learning rate.")
