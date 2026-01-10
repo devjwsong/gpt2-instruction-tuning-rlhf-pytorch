@@ -28,8 +28,9 @@ def _get_logprobs(
 
     # Pick the response tokens from logits and calculate the log probabilities.
     logprobs = torch.gather(F.log_softmax(logits, dim=-1), dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)  # (B, L-1)
+    logprobs *= masks  # (B, L-1)
 
-    return _masked_averaging(logprobs, masks=masks)  # ()
+    return logprobs.sum(dim=-1)  # (B)
 
 
 def _evaluate(
@@ -48,15 +49,16 @@ def _evaluate(
             chosen_input_ids.to(model.device), rejected_input_ids.to(model.device), chosen_labels.to(model.device), rejected_labels.to(model.device)
         
         with torch.no_grad():
-            cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # ()
-            cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # ()
-            ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # ()
-            ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # ()
+            cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # (B)
+            cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # (B)
+            ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # (B)
+            ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # (B)
 
         # Finalize the loss.
         chosen_kl_divs = cur_chosen_logprobs - ref_chosen_logprobs
         rejected_kl_divs = cur_rejected_logprobs - ref_rejected_logprobs
-        loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # ()
+        loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # (B)
+        loss = loss.mean()  # ()
         valid_losses.append(loss.detach().item())
 
     valid_loss = np.mean(valid_losses)
@@ -89,16 +91,17 @@ def _train(
                 chosen_input_ids.to(model.device), rejected_input_ids.to(model.device), chosen_labels.to(model.device), rejected_labels.to(model.device)
             
             # Calculate 4 logprobs: 1) Model + Chosen, 2) Model + Rejected, 3) Ref model + Chosen, 4) Ref model + Rejected
-            cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # ()
-            cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # ()
+            cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # (B)
+            cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # (B)
             with torch.no_grad():
-                ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # ()
-                ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # ()
+                ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # (B)
+                ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # (B)
 
             # Finalize the loss.
             chosen_kl_divs = cur_chosen_logprobs - ref_chosen_logprobs
             rejected_kl_divs = cur_rejected_logprobs - ref_rejected_logprobs
-            loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # ()
+            loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # (B)
+            loss = loss.mean()  # ()
 
             optimizer.zero_grad()
             loss.backward()
