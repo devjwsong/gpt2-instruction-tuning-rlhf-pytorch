@@ -218,11 +218,13 @@ def _train(
 
         # Validation.
         print("Running validation...")
+        policy.eval()
         eval_rewards = []
         for b in range(0, len(eval_query_set), args.batch_size):
             # Generate the outputs and get the rewards.
             batch_set = eval_query_set[b:b+args.batch_size]
-            full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
+            with torch.no_grad():
+                full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
             final_rewards, _ = get_rewards(full_seqs, reward_model)  # (B)
             eval_rewards += final_rewards.tolist()
 
