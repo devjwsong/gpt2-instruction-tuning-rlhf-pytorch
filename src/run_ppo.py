@@ -237,7 +237,7 @@ def _train(
             if not os.path.isdir(ckpt_path):
                 os.makedirs(ckpt_path)
             
-            torch.save(policy.state_dict(), ckpt_path + "/model.pth")
+            policy.policy.save_pretrained(ckpt_path)
             tokenizer.save_pretrained(ckpt_path)
         else:
             print("No update after validation. Keep going...")
