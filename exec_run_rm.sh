@@ -1,0 +1,13 @@
+python src/run_rm.py \
+    --seed=42 \
+    --data_dir=.data/rm \
+    --sft_model_path=REQUIRED \
+    --ckpt_dir=.model/rm \
+    --gpu_id=0 \
+    --max_len=1024 \
+    --min_target_len=1 \
+    --batch_size=16 \
+    --num_epochs=3 \
+    --learning_rate=1e-5 \
+    --warmup_ratio=0.0 \
+    --max_reward=5.0

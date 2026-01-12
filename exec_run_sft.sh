@@ -1,0 +1,12 @@
+python src/run_sft.py \
+    --seed=42 \
+    --data_dir=.data/sft \
+    --ckpt_dir=.model/sft \
+    --model_id=openai-community/gpt2 \
+    --gpu_id=0 \
+    --max_len=1024 \
+    --min_gen_len=1 \
+    --batch_size=16 \
+    --num_epochs=5 \
+    --learning_rate=2e-5 \
+    --warmup_ratio=0.1

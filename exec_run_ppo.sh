@@ -1,0 +1,25 @@
+python src/run_ppo.py \
+    --seed=42 \
+    --sft_model_path=REQUIRED \
+    --rm_model_path=REQUIRED \
+    --ckpt_dir=.model/ppo \
+    --gpu_id=0 \
+    --max_reward=5.0 \
+    --data_dir=.data/pref \
+    --max_len=1024 \
+    --min_gen_len=1 \
+    --do_sample \
+    --temperature=0.2 \
+    --top_k=50 \
+    --top_p=1.0 \
+    --num_outer_epochs=1 \
+    --num_inner_epochs=3 \
+    --batch_size=16 \
+    --learning_rate=1e-5 \
+    --max_gradient_norm=1.0 \
+    --beta=0.2 \
+    --max_kl_div=10.0 \
+    --gae_lambda=0.9 \
+    --gamma=1.0 \
+    --epsilon=0.2 \
+    --value_loss_coeff=0.1

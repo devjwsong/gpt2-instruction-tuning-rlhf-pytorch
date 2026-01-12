@@ -1,0 +1,13 @@
+python src/run_dpo.py \
+    --seed=42 \
+    --sft_model_path=REQUIRED \
+    --ckpt_dir=.model/dpo \
+    --gpu_id=0 \
+    --data_dir=.data/pref \
+    --max_len=1024 \
+    --min_gen_len=1 \
+    --num_epochs=1 \
+    --log_step=100 \
+    --batch_size=16 \
+    --learning_rate=1e-5 \
+    --beta=0.2

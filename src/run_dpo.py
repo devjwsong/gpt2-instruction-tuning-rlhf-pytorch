@@ -201,12 +201,12 @@ if __name__=='__main__':
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
     parser.add_argument('--data_dir', type=str, default=".data/pref", help="The name of the directory where data files are stored.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
-    parser.add_argument('--min_gen_len', type=int, default=100, help="The minumum number of tokens to generate, except for tags and EOS token.")
-    parser.add_argument('--num_epochs', type=int, default=3, help="The number of epochs.")
+    parser.add_argument('--min_gen_len', type=int, default=1, help="The minumum number of tokens to generate, except for tags and EOS token.")
+    parser.add_argument('--num_epochs', type=int, default=1, help="The number of epochs.")
     parser.add_argument('--log_step', type=int, default=100, help="The training step to log the loss.")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
-    parser.add_argument('--learning_rate', type=float, default=2e-5, help="The learning rate.")
-    parser.add_argument('--beta', type=float, default=0.0, help="The coefficient for per-token KL divergence.")
+    parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
+    parser.add_argument('--beta', type=float, default=0.2, help="The coefficient for per-token KL divergence.")
 
     args = parser.parse_args()
 
