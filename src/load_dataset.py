@@ -166,7 +166,7 @@ def main(args: argparse.Namespace):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=42, help="The random seed.")
+    parser.add_argument('--seed', type=int, default=42, help="The random seed for sampling / shuffling.")
     parser.add_argument('--data_dir', type=str, default=".data", help="The name of the parent directory where data files are stored.")
     parser.add_argument('--sft_ratio', type=float, default=0.1, help="The ratio of the data samples for supervised fine-tuning.")
     parser.add_argument('--rm_ratio', type=float, default=0.1, help="The ratio of the data samples for reward model training.")

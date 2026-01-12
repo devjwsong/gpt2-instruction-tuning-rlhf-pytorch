@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 You need to load the UltraFeedback dataset, filter out non-English texts, split the train/validation sets for each step (SFT, RM, PPO, and DPO), and form paired response sets (chosen vs rejected) for DPO. Note that we only consider a response with the highest score as chosen and the lowest score as rejected, while discarding the rest of the responses regardless of their scores. This reduces the dataset size, but ensures the difference between two responses for reliability. While the paired responses are not needed for PPO, this project uses the same preference dataset for both PPO and DPO for comparison. For PPO, any responses are not used, but only instructions are used for online generation.
 
-You can change the arguments in `exec_load_dataset.sh` freely. Refer to the description of each argument and its default value [here](#src/load_dataset.py).
+You can change the arguments in `exec_load_dataset.sh` freely. Refer to the description of each argument and its default value [here](#step-(2)).
 
 ```shell
 sh exec_load_dataset.sh
@@ -46,7 +46,7 @@ With default arguments, you will see `.data` directory created:
 
 Train an SFT model starting from the GPT-2 checkpoint on the instruction following datasets.
 
-You can change the arguments in `exec_run_sft.sh` freely. Refer to the description of each argument and its default value [here](#src/run_sft.py).
+You can change the arguments in `exec_run_sft.sh` freely. Refer to the description of each argument and its default value [here](#step-(3)).
 
 ```shell
 sh exec_run_sft.sh
@@ -73,7 +73,7 @@ After finishing step (3), you can choose two paths for post-training. For PPO, f
 
 Train a reward model starting from one of SFT checkpoints.
 
-You should specify `--sft_model_path` in `exec_run_rm.sh` as one of the checkpoints you trained in step (3). You can change other arguments freely. Refer to the description of each argument and its default value [here](#src/run_rm.py).
+You should specify `--sft_model_path` in `exec_run_rm.sh` as one of the checkpoints you trained in step (3). You can change other arguments freely. Refer to the description of each argument and its default value [here](#step-(4.a.1)).
 
 ```shell
 sh exec_run_rm.sh
@@ -97,7 +97,7 @@ With default arguments, you will see `.model/rm` directory created:
 
 Post-train one of your SFT checkpoints on the preference samples, using PPO.
 
-You should specify `--sft_model_path` and `--rm_model_path` in `exec_run_ppo.sh` as one of the checkpoints you trained in step (3) and (4.a.1). You can change other arguments freely. Refer to the description of each argument and its default value [here](#src/run_ppo.py).
+You should specify `--sft_model_path` and `--rm_model_path` in `exec_run_ppo.sh` as one of the checkpoints you trained in step (3) and (4.a.1). You can change other arguments freely. Refer to the description of each argument and its default value [here](#step-(4.a.2)).
 
 ```shell
 sh exec_run_ppo.sh
@@ -121,7 +121,7 @@ With default arguments, you will see `.model/ppo` directory created:
 
 Post-train one of your SFT checkpoints on the preference samples, using DPO. Note that DPO does not require any reward model.
 
-You should specify `--sft_model_path` in `exec_run_dpo.sh` as one of the checkpoints you trained in step (3). You can change other arguments freely. Refer to the description of each argument and its default value [here](#src/run_dpo.py).
+You should specify `--sft_model_path` in `exec_run_dpo.sh` as one of the checkpoints you trained in step (3). You can change other arguments freely. Refer to the description of each argument and its default value [here](#step-(4.b)).
 
 ```shell
 sh exec_run_dpo.sh
@@ -144,25 +144,104 @@ With default arguments, you will see `.model/dpo` directory created:
 
 ### Arguments
 
-#### `src/load_dataset.py`
+#### Step (2)
 
+| Argument        | Type    | Description                                                  | Default |
+| --------------- | ------- | ------------------------------------------------------------ | ------- |
+| `--seed`        | `int`   | The random seed for sampling / shuffling.                    | `42`    |
+| `--data_dir`    | `str`   | The name of the parent directory where data files are stored. | `.data` |
+| `--sft_ratio`   | `float` | The ratio of the data samples for supervised fine-tuning.    | `0.1`   |
+| `--rm_ratio`    | `float` | The ratio of the data samples for reward model training.     | `0.1`   |
+| `--train_ratio` | `float` | The ratio of the data samples for train set.                 | `0.8`   |
 
+<br/>
 
-#### `src/run_sft.py`
+#### Step (3)
 
+| Argument          | Type    | Description                                                  | Default                 |
+| ----------------- | ------- | ------------------------------------------------------------ | ----------------------- |
+| `--seed`          | `int`   | The random seed for data shuffling.                          | `42`                    |
+| `--data_dir`      | `str`   | The name of the directory where data files are stored.       | `.data/sft`             |
+| `--ckpt_dir`      | `str`   | The name of the directory to save checkpoints.               | `.model/sft`            |
+| `--model_id`      | `str`   | The model ID of the pre-trained GPT-2 model in Hugging Face Hub. | `openai-community/gpt2` |
+| `--gpu_id`        | `int`   | The GPU ID to use if CUDA is available.                      | `0`                     |
+| `--max_len`       | `int`   | The maximum number of tokens.                                | `1024`                  |
+| `--min_gen_len`   | `int`   | The minimum number of tokens to generate, except for tags and EOS token. | `1`                     |
+| `--batch_size`    | `int`   | The batch size.                                              | `16`                    |
+| `--num_epochs`    | `int`   | The number of epochs.                                        | `5`                     |
+| `--learning_rate` | `float` | The learning rate.                                           | `2e-5`                  |
+| `--warmup_ratio`  | `float` | The ratio of warm-up steps to the total training steps.      | `0.1`                   |
 
+<br/>
 
-#### `src/run_rm.py`
+#### Step (4.a.1)
 
+| Argument           | Type    | Description                                                  | Default     |
+| ------------------ | ------- | ------------------------------------------------------------ | ----------- |
+| `--seed`           | `int`   | The random seed for data shuffling and reward head initialization. | `42`        |
+| `--data_dir`       | `str`   | The name of the directory where data files are stored.       | `.data/rm`  |
+| `--sft_model_path` | `str`   | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*  |
+| `--ckpt_dir`       | `str`   | The name of the directory to save checkpoints.               | `.model/rm` |
+| `--gpu_id`         | `int`   | The GPU ID to use if CUDA is available.                      | `0`         |
+| `--max_len`        | `int`   | The maximum number of tokens.                                | `1024`      |
+| `--min_target_len` | `int`   | The minimum number of tokens of target output, except for tags and EOS token. | `1`         |
+| `--batch_size`     | `int`   | The batch size.                                              | `16`        |
+| `--num_epochs`     | `int`   | The number of epochs                                         | `3`         |
+| `--learning_rate`  | `float` | The learning rate.                                           | `1e-5`      |
+| `--warmup_ratio`   | `float` | The ratio of warm-up steps to the total training steps.      | `0.0`       |
+| `--max_reward`     | `float` | The maximum reward value. The reward range is set to [1.0, max]. | `5.0`       |
 
+<br/>
 
-#### `src/run_ppo.py`
+#### Step (4.a.2)
 
+| Argument              | Type         | Description                                                  | Default      |
+| --------------------- | ------------ | ------------------------------------------------------------ | ------------ |
+| `--seed`              | `int`        | The random seed for data shuffling and value head initialization. | `42`         |
+| `--sft_model_path`    | `str`        | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*   |
+| `--rm_model_path`     | `str`        | The checkpoint path of the reward model.                     | *REQUIRED*   |
+| `--ckpt_dir`          | `str`        | The name of the directory to save checkpoints.               | `.model/ppo` |
+| `--gpu_id`            | `int`        | The GPU ID to use if CUDA is available.                      | `0`          |
+| `--max_reward`        | `float`      | The maximum reward value. The reward range is set to [1.0, max]. | `5.0`        |
+| `--data_dir`          | `str`        | The name of the directory where data files are stored.       | `.data/pref` |
+| `--max_len`           | `int`        | The maximum number of tokens.                                | `1024`       |
+| `--min_gen_len`       | `int`        | The minimum number of tokens to generate, except for tags and EOS token. | `1`          |
+| `--do_sampling`       | `store_true` | Whether or not to use sampling.                              | On           |
+| `--temperature`       | `float`      | The temperature value to control diversity during generation. | `0.2`        |
+| `--top_k`             | `int`        | The number of highest probability vocabulary tokens to keep for top-k-filtering. | `50`         |
+| `--top_p`             | `float`      | Only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. | `1.0`        |
+| `--num_outer_epoch`   | `int`        | The number of epochs. (Outer training loop)                  | `1`          |
+| `--num_inner_epoch`   | `int`        | The number of epochs. (Inner PPO loop)                       | `3`          |
+| `--batch_size`        | `int`        | The batch size.                                              | `16`         |
+| `--learning_rate`     | `float`      | The learning rate.                                           | `1e-5`       |
+| `--max_gradient_norm` | `float`      | The maximum value for gradient clipping.                     | `1.0`        |
+| `--beta`              | `float`      | The coefficient for per-token KL divergence penalty.         | `0.2`        |
+| `--max_kl_div`        | `float`      | The maximum KL divergence value for clamping.                | `10.0`       |
+| `--gae_lambda`        | `float`      | The delta value for GAE computation to control the extent of applying TDL and MCE. | `0.9`        |
+| `--gamma`             | `float`      | The discount factor for RL.                                  | `1.0`        |
+| `--epsilon`           | `float`      | The clipping value for PPO loss computation.                 | `0.2`        |
+| `--value_loss_coeff`  | `float`      | The coefficient to apply the value loss.                     | `0.1`        |
 
+<br/>
 
-#### `src/run_dpo.py`
+#### Step (4.b)
 
+| Argument           | Type    | Description                                                  | Default      |
+| ------------------ | ------- | ------------------------------------------------------------ | ------------ |
+| `--seed`           | `int`   | The random seed for data shuffling.                          | `42`         |
+| `--sft_model_path` | `str`   | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*   |
+| `--ckpt_dir`       | `str`   | The name of the directory to save checkpoints.               | `.model/dpo` |
+| `--gpu_id`         | `int`   | The GPU ID to use if CUDA is available.                      | `0`          |
+| `--data_dir`       | `str`   | The name of the directory where data files are stored.       | `.data/pref` |
+| `--max_len`        | `int`   | The maximum number of tokens.                                | `1024`       |
+| `--min_gen_len`    | `int`   | The minimum number of tokens to generate, except for tags and EOS token. | `1`          |
+| `--num_epochs`     | `int`   | The number of epochs.                                        | `1`          |
+| `--log_step`       | `int`   | The training step period to log the loss.                    | `100`        |
+| `--batch_size`     | `int`   | The batch size.                                              | `16`         |
+| `--learning_rate`  | `float` | The learning rate.                                           | `1e-5`       |
+| `--beta`           | `float` | The coefficient for per-token KL divergence penalty.         | `0.2`        |
 
+<br/>
 
 ---
 

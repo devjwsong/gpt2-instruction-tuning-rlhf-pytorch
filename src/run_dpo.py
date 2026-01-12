@@ -195,7 +195,7 @@ def main(args: argparse.Namespace):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=42, help="The random seed.")
+    parser.add_argument('--seed', type=int, default=42, help="The random seed for data shuffling.")
     parser.add_argument('--sft_model_path', type=str, required=True, help="The checkpoint path of the supervised fine-tuned model.")
     parser.add_argument('--ckpt_dir', type=str, default=".model/dpo", help="The name of the directory to save checkpoints.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
@@ -203,10 +203,10 @@ if __name__=='__main__':
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
     parser.add_argument('--min_gen_len', type=int, default=1, help="The minumum number of tokens to generate, except for tags and EOS token.")
     parser.add_argument('--num_epochs', type=int, default=1, help="The number of epochs.")
-    parser.add_argument('--log_step', type=int, default=100, help="The training step to log the loss.")
+    parser.add_argument('--log_step', type=int, default=100, help="The training step period to log the loss.")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
-    parser.add_argument('--beta', type=float, default=0.2, help="The coefficient for per-token KL divergence.")
+    parser.add_argument('--beta', type=float, default=0.2, help="The coefficient for per-token KL divergence penalty.")
 
     args = parser.parse_args()
 
