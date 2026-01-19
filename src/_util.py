@@ -75,13 +75,7 @@ class RMDataset(Dataset):
                  min_target_len: int=100,
                  max_score: float=1.0
     ):
-        self.input_ids = []  # (N ,L)
-        self.labels = []  # (N)
-
-        # Find the current max scores.
-        default_max_score = 0.0
-        for sample in samples:
-            default_max_score = max(default_max_score, sample['score'])
+        self.chosen_input_ids, self.rejected_input_ids = [], []  # (N ,L), (N, L)
 
         # Process each sample.
         for sample in tqdm(samples):
@@ -97,24 +91,25 @@ class RMDataset(Dataset):
             if cur_len + min_target_len > max_len:
                 continue
 
-            # Append the target.
+            # Process pairs (chosen response, rejected response)
             sequence_ids += resp_start_token_ids
-            resp_token_ids = tokenizer(sample['response'])['input_ids']
+            chosen_response, rejected_response = sample['chosen']['response'], sample['rejected']['response']
+
+            resp_token_ids = tokenizer(chosen_response)['input_ids']
             gen_len = max_len - 1 - len(resp_end_token_ids) - len(sequence_ids)
             resp_token_ids = resp_token_ids[:gen_len]
-            self.input_ids.append(sequence_ids + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
+            self.chosen_input_ids.append(sequence_ids + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
 
-            # Normalize & Add label.
-            score = sample['score']
-            if default_max_score > 1.0:
-                score = 1.0 + (score - 1.0) * ((max_score - 1.0) / (default_max_score - 1.0))
-            self.labels.append(score)
+            resp_token_ids = tokenizer(rejected_response)['input_ids']
+            gen_len = max_len - 1 - len(resp_end_token_ids) - len(sequence_ids)
+            resp_token_ids = resp_token_ids[:gen_len]
+            self.rejected_input_ids.append(sequence_ids + resp_token_ids + resp_end_token_ids + [tokenizer.eos_token_id])
 
     def __len__(self) -> int:
-        return len(self.input_ids)
+        return len(self.chosen_input_ids)
     
     def __getitem__(self, idx) -> Tuple[List[int], List[int]]:
-        return self.input_ids[idx], self.labels[idx]
+        return self.chosen_input_ids[idx], self.rejected_input_ids[idx]
 
 
 class RMPadCollate():
@@ -122,15 +117,15 @@ class RMPadCollate():
         self.eos_id = eos_id
         
     def pad_collate(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
-        input_ids, labels = [], []
+        chosen_input_ids, rejected_input_ids = [], []  # (B, C_L), (B, R_L)
         for pair in batch:
-            input_ids.append(torch.LongTensor(pair[0]))
-            labels.append(pair[1])
+            chosen_input_ids.append(torch.LongTensor(pair[0]))
+            rejected_input_ids.append(torch.LongTensor(pair[1]))
             
-        input_ids = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.eos_id)
-        labels = torch.FloatTensor(labels)
+        chosen_input_ids = torch.nn.utils.rnn.pad_sequence(chosen_input_ids, batch_first=True, padding_value=self.eos_id)
+        rejected_input_ids = torch.nn.utils.rnn.pad_sequence(rejected_input_ids, batch_first=True, padding_value=self.eos_id)
     
-        return input_ids, labels
+        return chosen_input_ids, rejected_input_ids
     
 
 class QueryDataset(Dataset):

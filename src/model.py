@@ -29,13 +29,12 @@ class ValueHead(nn.Module):
 
 
 class RewardModel(nn.Module):
-    def __init__(self, sf_model_path: str, reward_token_id: int, max_reward: float=1.0):
+    def __init__(self, sf_model_path: str, reward_token_id: int):
         super().__init__()
 
         self.model = AutoModel.from_pretrained(sf_model_path)
         self.reward_head = RewardHead(self.model.config.n_embd)
         self.reward_token_id = reward_token_id
-        self.max_reward = max_reward
 
     def _find_reward_tokens(self, input_ids: torch._tensor) -> torch.tensor:
         # input_ids: (B, L)
@@ -59,9 +58,7 @@ class RewardModel(nn.Module):
         hidden_states = torch.gather(last_hidden_states, dim=1, index=gather_locs).squeeze(1)  # (B, d)
         rewards = self.reward_head(hidden_states)  # (B)
 
-        # Reward normalization.
-        rewards = torch.sigmoid(rewards)  # (B)
-        return 1.0 + (self.max_reward - 1) * rewards, reward_locs  # Set the range into [1.0 - max_reward].
+        return rewards, reward_locs  # Set the range into [1.0 - max_reward].
     
 
 class PolicyWithValueHead(nn.Module):

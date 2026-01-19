@@ -24,12 +24,14 @@ def _evaluate(
     valid_losses = []
     with torch.no_grad():
         for batch in tqdm(eval_loader):
-            input_ids, labels = batch
+            chosen_input_ids, rejected_input_ids = batch
             model_device = next(model.parameters()).device
-            input_ids, labels = input_ids.to(model_device), labels.to(model_device)
-            preds, _ = model(input_ids)
+            chosen_input_ids, rejected_input_ids = chosen_input_ids.to(model_device), rejected_input_ids.to(model_device)
 
-            loss = loss_func(preds, labels)  # ()
+            chosen_rewards, _ = model(chosen_input_ids)  # (B)
+            rejected_rewards, _ = model(rejected_input_ids)  # (B)
+            loss = -1 * torch.log(torch.sigmoid(chosen_rewards - rejected_rewards))  # (B)
+            loss = loss.mean()
             valid_losses.append(loss.detach())
         
         valid_losses = [loss.item() for loss in valid_losses]
@@ -60,14 +62,16 @@ def _train(
 
         train_losses = []
         for batch in tqdm(train_loader):
-            input_ids, labels = batch
+            chosen_input_ids, rejected_input_ids = batch
             model_device = next(model.parameters()).device
-            input_ids, labels = input_ids.to(model_device), labels.to(model_device)
+            chosen_input_ids, rejected_input_ids = chosen_input_ids.to(model_device), rejected_input_ids.to(model_device)
 
             if args.use_fp16:
                 with torch.cuda.amp.autocast():
-                    preds, _ = model(input_ids)
-                    loss = loss_func(preds, labels)  # ()
+                    chosen_rewards, _ = model(chosen_input_ids)  # (B)
+                    rejected_rewards, _ = model(rejected_input_ids)  # (B)
+                    loss = -1 * torch.log(torch.sigmoid(chosen_rewards - rejected_rewards))  # (B)
+                    loss = loss.mean()
 
                 optimizer.zero_grad()
                 scaler.scale(loss).backward()
@@ -76,8 +80,10 @@ def _train(
                 scaler.update()
 
             else:
-                preds, _ = model(input_ids)
-                loss = loss_func(preds, labels)  # ()
+                chosen_rewards, _ = model(chosen_input_ids)  # (B)
+                rejected_rewards, _ = model(rejected_input_ids)  # (B)
+                loss = -1 * torch.log(torch.sigmoid(chosen_rewards - rejected_rewards))  # (B)
+                loss = loss.mean()
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -124,17 +130,17 @@ def main(args: argparse.Namespace):
     device = torch.device(f"cuda:{args.gpu_id}") if torch.cuda.is_available() else torch.device('cpu')
 
     # Load the tokenizer and model.
+    _fix_seed(args.seed)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
     model = RewardModel(
         args.sft_model_path, 
-        reward_token_id=tokenizer.eos_token_id,
-        max_reward=args.max_reward,
+        reward_token_id=tokenizer.eos_token_id
     ).to(device)
 
     # Preprocess Dataset objects.
     print("[# of data samples after pre-processing]")
-    train_set = RMDataset(train_samples, tokenizer, args.max_len, args.min_target_len, args.max_reward)
-    eval_set = RMDataset(eval_samples, tokenizer, args.max_len, args.min_target_len, args.max_reward)
+    train_set = RMDataset(train_samples, tokenizer, args.max_len, args.min_target_len)
+    eval_set = RMDataset(eval_samples, tokenizer, args.max_len, args.min_target_len)
     print(f"{len(train_set)} samples processed from train set.")
     print(f"{len(eval_set)} samples processed from eval set.")
 
@@ -176,7 +182,7 @@ def main(args: argparse.Namespace):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=42, help="The random seed for data shuffling and reward head initialization.")
-    parser.add_argument('--data_dir', type=str, default=".data/rm", help="The name of the directory where data files are stored.")
+    parser.add_argument('--data_dir', type=str, default=".data/pref", help="The name of the directory where data files are stored.")
     parser.add_argument('--sft_model_path', type=str, required=True, help="The checkpoint path of the supervised fine-tuned model.")
     parser.add_argument('--ckpt_dir', type=str, default=".model/rm", help="The name of the directory to save checkpoints.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
@@ -186,7 +192,6 @@ if __name__=='__main__':
     parser.add_argument('--num_epochs', type=int, default=3, help="The number of epochs.")
     parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help="The ratio of warm-up steps to the total training steps.")
-    parser.add_argument('--max_reward', type=float, default=5.0, help="The maximum reward value. The reward range is set to [1.0, max].")
     parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()
