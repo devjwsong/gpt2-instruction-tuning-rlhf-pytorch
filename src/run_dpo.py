@@ -5,7 +5,7 @@ import math
 
 from copy import deepcopy
 from tqdm import tqdm
-from _util import _fix_seed, PrefDataset, PrefPadCollate, _masked_averaging
+from _util import _fix_seed, PrefDataset, PrefPadCollate
 from transformers import AutoTokenizer, AutoModelForCausalLM, get_polynomial_decay_schedule_with_warmup
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
@@ -74,6 +74,8 @@ def _train(
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
 ):
+    scaler = torch.cuda.amp.GradScaler()
+
     _fix_seed(args.seed)
     print("[Training]")
     ref_model = deepcopy(model)
@@ -91,22 +93,43 @@ def _train(
                 chosen_input_ids.to(model.device), rejected_input_ids.to(model.device), chosen_labels.to(model.device), rejected_labels.to(model.device)
             
             # Calculate 4 logprobs: 1) Model + Chosen, 2) Model + Rejected, 3) Ref model + Chosen, 4) Ref model + Rejected
-            cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # (B)
-            cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # (B)
-            with torch.no_grad():
-                ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # (B)
-                ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # (B)
+            if args.use_fp16:
+                with torch.cuda.amp.autocast():
+                    cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # (B)
+                    cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # (B)
+                    with torch.no_grad():
+                        ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # (B)
+                        ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # (B)
 
-            # Finalize the loss.
-            chosen_kl_divs = cur_chosen_logprobs - ref_chosen_logprobs
-            rejected_kl_divs = cur_rejected_logprobs - ref_rejected_logprobs
-            loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # (B)
-            loss = loss.mean()  # ()
+                # Finalize the loss.
+                chosen_kl_divs = cur_chosen_logprobs - ref_chosen_logprobs
+                rejected_kl_divs = cur_rejected_logprobs - ref_rejected_logprobs
+                loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # (B)
+                loss = loss.mean()  # ()
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scheduler.step()
+                scaler.update()
+
+            else:
+                cur_chosen_logprobs = _get_logprobs(model, chosen_input_ids, chosen_labels)  # (B)
+                cur_rejected_logprobs = _get_logprobs(model, rejected_input_ids, rejected_labels)  # (B)
+                with torch.no_grad():
+                    ref_chosen_logprobs = _get_logprobs(ref_model, chosen_input_ids, chosen_labels)  # (B)
+                    ref_rejected_logprobs = _get_logprobs(ref_model, rejected_input_ids, rejected_labels)  # (B)
+
+                # Finalize the loss.
+                chosen_kl_divs = cur_chosen_logprobs - ref_chosen_logprobs
+                rejected_kl_divs = cur_rejected_logprobs - ref_rejected_logprobs
+                loss = -1 * torch.log(torch.sigmoid(args.beta * (chosen_kl_divs - rejected_kl_divs)))  # (B)
+                loss = loss.mean()  # ()
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
             train_losses.append(loss.detach().item())
             if b % args.log_step == 0:
@@ -207,6 +230,7 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
     parser.add_argument('--beta', type=float, default=0.2, help="The coefficient for per-token KL divergence penalty.")
+    parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()
 

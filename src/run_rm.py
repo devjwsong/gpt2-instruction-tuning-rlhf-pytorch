@@ -47,6 +47,8 @@ def _train(
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
 ):
+    scaler = torch.cuda.amp.GradScaler()
+
     _fix_seed(args.seed)
     print("[Training]")
 
@@ -61,14 +63,26 @@ def _train(
             input_ids, labels = batch
             model_device = next(model.parameters()).device
             input_ids, labels = input_ids.to(model_device), labels.to(model_device)
-            preds, _ = model(input_ids)
 
-            loss = loss_func(preds, labels)  # ()
+            if args.use_fp16:
+                with torch.cuda.amp.autocast():
+                    preds, _ = model(input_ids)
+                    loss = loss_func(preds, labels)  # ()
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scheduler.step()
+                scaler.update()
+
+            else:
+                preds, _ = model(input_ids)
+                loss = loss_func(preds, labels)  # ()
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
             train_losses.append(loss.detach())
 
@@ -173,6 +187,7 @@ if __name__=='__main__':
     parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help="The ratio of warm-up steps to the total training steps.")
     parser.add_argument('--max_reward', type=float, default=5.0, help="The maximum reward value. The reward range is set to [1.0, max].")
+    parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()
 

@@ -52,6 +52,8 @@ def _train(
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
 ):
+    scaler = torch.cuda.amp.GradScaler()
+
     _fix_seed(args.seed)
     print("[Training]")
 
@@ -65,12 +67,22 @@ def _train(
             input_ids, labels = batch
             input_ids, labels = input_ids.to(model.device), labels.to(model.device)
 
-            loss = model(input_ids=input_ids, labels=labels)[0]
+            if args.use_fp16:
+                with torch.cuda.amp.autocast():
+                    loss = model(input_ids=input_ids, labels=labels)[0]
+                
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scheduler.step()
+                scaler.update()
+            else:
+                loss = model(input_ids=input_ids, labels=labels)[0]
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
             train_losses.append(loss.detach())
             ppl = torch.exp(loss.detach())
@@ -175,6 +187,7 @@ if __name__=='__main__':
     parser.add_argument('--num_epochs', type=int, default=5, help="The number of epochs.")
     parser.add_argument('--learning_rate', type=float, default=2e-5, help="The learning rate.")
     parser.add_argument('--warmup_ratio', type=float, default=0.1, help="The ratio of warm-up steps to the total training steps.")
+    parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()
 

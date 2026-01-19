@@ -6,7 +6,7 @@ import os
 
 from model import RewardModel, PolicyWithValueHead
 from _util import KEY2TAG, _fix_seed, QueryDataset, _masked_averaging, _masked_whitening
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, get_polynomial_decay_schedule_with_warmup
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
 from torch.optim import AdamW
@@ -108,6 +108,8 @@ def _train(
     eval_query_set: QueryDataset,
     **generation_kwargs
 ):
+    scaler = torch.cuda.amp.GradScaler()
+
     print("[Training]")
     # Copy the parameters to the reference policy. 
     # This model is fixed into the one from SFT and never changes.
@@ -115,6 +117,15 @@ def _train(
     ref_policy.eval()
 
     optimizer = AdamW(policy.parameters(), lr=args.learning_rate)
+    q, r = divmod(len(train_query_set), args.batch_size)
+    num_batches = q if r == 0 else q + 1
+    total_train_steps = args.num_outer_epochs * num_batches
+    scheduler = get_polynomial_decay_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=0,
+        num_training_steps=total_train_steps,
+        power=2
+    )
 
     best_eval_reward = -1e+7
     for outer_epoch in range(1, args.num_outer_epochs+1):
@@ -176,15 +187,32 @@ def _train(
                 pred_log_probs = F.log_softmax(pred_logits, dim=-1)  # (B, L, V)
                 pred_log_probs = torch.gather(pred_log_probs[:, :-1], dim=-1, index=batch_seqs[:, 1:].unsqueeze(-1)).squeeze(-1)  # (B, L-1)
 
-                loss, ppo_loss, value_loss = get_loss(
-                    pred_log_probs, pred_values, log_probs, returns, advantages, masks,
-                    epsilon=args.epsilon,
-                    value_loss_coeff=args.value_loss_coeff
-                )
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=args.max_gradient_norm)
-                optimizer.step()
+                if args.use_fp16:
+                    with torch.cuda.amp.autocast():
+                        loss, ppo_loss, value_loss = get_loss(
+                            pred_log_probs, pred_values, log_probs, returns, advantages, masks,
+                            epsilon=args.epsilon,
+                            value_loss_coeff=args.value_loss_coeff
+                        )
+                    optimizer.zero_grad()
+                    scaler.scale(loss).backward()
+                    torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=args.max_gradient_norm)
+
+                    scaler.step(optimizer)
+                    scheduler.step()
+                    scaler.update()
+
+                else:
+                    loss, ppo_loss, value_loss = get_loss(
+                        pred_log_probs, pred_values, log_probs, returns, advantages, masks,
+                        epsilon=args.epsilon,
+                        value_loss_coeff=args.value_loss_coeff
+                    )
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=args.max_gradient_norm)
+                    optimizer.step()
+                    scheduler.step()
 
                 inner_losses.append(loss.item())
                 inner_ppo_losses.append(ppo_loss.item())
@@ -327,6 +355,7 @@ if __name__=='__main__':
     parser.add_argument('--gamma', type=float, default=1.0, help="The discount factor for RL.")
     parser.add_argument('--epsilon', type=float, default=0.2, help="`The clipping value for PPO loss computation.")
     parser.add_argument('--value_loss_coeff', type=float, default=0.1, help="The coefficient to apply the value loss.")
+    parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()
 
