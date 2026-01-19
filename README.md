@@ -21,7 +21,9 @@ pip install -r requirements.txt
 
 #### (2) Sample / Filter data
 
-You need to load the UltraFeedback dataset, filter out non-English texts, split the train/validation sets for each step (SFT, RM, PPO, and DPO), and form paired response sets (chosen vs rejected) for DPO. Note that we only consider a response with the highest score as chosen and the lowest score as rejected, while discarding the rest of the responses regardless of their scores. This reduces the dataset size, but ensures the difference between two responses for reliability. While the paired responses are not needed for PPO, this project uses the same preference dataset for both PPO and DPO for comparison. For PPO, any responses are not used, but only instructions are used for online generation.
+You need to load the UltraFeedback dataset, filter out non-English texts, and separate them into two groups: 1) the supervised fine-tuning dataset and 2) the preference dataset. Since one prompt is paired with responses from multiple models and their scores, we sample two responses from these annotations that have a score difference of at least the minimum difference value. Then we use the remaining responses that don't fail for these pairs in supervised training.
+
+For reward model training and running DPO, we use the same preference dataset. For PPO, we also use it, but only queries without considering the response pairs. Since PPO does not require the sample responses and the model generates the responses online, we believe that this does not reduce the integrity and diversity of datasets too much.
 
 You can change the arguments in `exec_load_dataset.sh` freely. Refer to the description of each argument and its default value [here](#step-(2)).
 
@@ -36,8 +38,7 @@ With default arguments, you will see `.data` directory created:
 ```
 .data
   └--sft  # For SFT (Supervised Fine-Tuning)
-  └--rm  # For RM (Reward Model)
-  └--pref  # For PPO/DPO
+  └--pref  # For RM (Reward Model) / PPO / DPO
 ```
 
 <br/>
@@ -150,46 +151,46 @@ With default arguments, you will see `.model/dpo` directory created:
 | --------------- | ------- | ------------------------------------------------------------ | ------- |
 | `--seed`        | `int`   | The random seed for sampling / shuffling.                    | `42`    |
 | `--data_dir`    | `str`   | The name of the parent directory where data files are stored. | `.data` |
-| `--sft_ratio`   | `float` | The ratio of the data samples for supervised fine-tuning.    | `0.1`   |
-| `--rm_ratio`    | `float` | The ratio of the data samples for reward model training.     | `0.1`   |
 | `--train_ratio` | `float` | The ratio of the data samples for train set.                 | `0.8`   |
+| `--min_diff`    | `float` | The minimum difference between chosen and rejected responses. | `2.0`   |
 
 <br/>
 
 #### Step (3)
 
-| Argument          | Type    | Description                                                  | Default                 |
-| ----------------- | ------- | ------------------------------------------------------------ | ----------------------- |
-| `--seed`          | `int`   | The random seed for data shuffling.                          | `42`                    |
-| `--data_dir`      | `str`   | The name of the directory where data files are stored.       | `.data/sft`             |
-| `--ckpt_dir`      | `str`   | The name of the directory to save checkpoints.               | `.model/sft`            |
-| `--model_id`      | `str`   | The model ID of the pre-trained GPT-2 model in Hugging Face Hub. | `openai-community/gpt2` |
-| `--gpu_id`        | `int`   | The GPU ID to use if CUDA is available.                      | `0`                     |
-| `--max_len`       | `int`   | The maximum number of tokens.                                | `1024`                  |
-| `--min_gen_len`   | `int`   | The minimum number of tokens to generate, except for tags and EOS token. | `1`                     |
-| `--batch_size`    | `int`   | The batch size.                                              | `16`                    |
-| `--num_epochs`    | `int`   | The number of epochs.                                        | `5`                     |
-| `--learning_rate` | `float` | The learning rate.                                           | `2e-5`                  |
-| `--warmup_ratio`  | `float` | The ratio of warm-up steps to the total training steps.      | `0.1`                   |
+| Argument          | Type         | Description                                                  | Default                 |
+| ----------------- | ------------ | ------------------------------------------------------------ | ----------------------- |
+| `--seed`          | `int`        | The random seed for data shuffling.                          | `42`                    |
+| `--data_dir`      | `str`        | The name of the directory where data files are stored.       | `.data/sft`             |
+| `--ckpt_dir`      | `str`        | The name of the directory to save checkpoints.               | `.model/sft`            |
+| `--model_id`      | `str`        | The model ID of the pre-trained GPT-2 model in Hugging Face Hub. | `openai-community/gpt2` |
+| `--gpu_id`        | `int`        | The GPU ID to use if CUDA is available.                      | `0`                     |
+| `--max_len`       | `int`        | The maximum number of tokens.                                | `1024`                  |
+| `--min_gen_len`   | `int`        | The minimum number of tokens to generate, except for tags and EOS token. | `1`                     |
+| `--batch_size`    | `int`        | The batch size.                                              | `16`                    |
+| `--num_epochs`    | `int`        | The number of epochs.                                        | `5`                     |
+| `--learning_rate` | `float`      | The learning rate.                                           | `2e-5`                  |
+| `--warmup_ratio`  | `float`      | The ratio of warm-up steps to the total training steps.      | `0.1`                   |
+| `--use_fp16`      | `store_true` | Whether to use float16 mixed precision or not.               | Off                     |
 
 <br/>
 
 #### Step (4.a.1)
 
-| Argument           | Type    | Description                                                  | Default     |
-| ------------------ | ------- | ------------------------------------------------------------ | ----------- |
-| `--seed`           | `int`   | The random seed for data shuffling and reward head initialization. | `42`        |
-| `--data_dir`       | `str`   | The name of the directory where data files are stored.       | `.data/rm`  |
-| `--sft_model_path` | `str`   | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*  |
-| `--ckpt_dir`       | `str`   | The name of the directory to save checkpoints.               | `.model/rm` |
-| `--gpu_id`         | `int`   | The GPU ID to use if CUDA is available.                      | `0`         |
-| `--max_len`        | `int`   | The maximum number of tokens.                                | `1024`      |
-| `--min_target_len` | `int`   | The minimum number of tokens of target output, except for tags and EOS token. | `1`         |
-| `--batch_size`     | `int`   | The batch size.                                              | `16`        |
-| `--num_epochs`     | `int`   | The number of epochs                                         | `3`         |
-| `--learning_rate`  | `float` | The learning rate.                                           | `1e-5`      |
-| `--warmup_ratio`   | `float` | The ratio of warm-up steps to the total training steps.      | `0.0`       |
-| `--max_reward`     | `float` | The maximum reward value. The reward range is set to [1.0, max]. | `5.0`       |
+| Argument           | Type         | Description                                                  | Default      |
+| ------------------ | ------------ | ------------------------------------------------------------ | ------------ |
+| `--seed`           | `int`        | The random seed for data shuffling and reward head initialization. | `42`         |
+| `--data_dir`       | `str`        | The name of the directory where data files are stored.       | `.data/pref` |
+| `--sft_model_path` | `str`        | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*   |
+| `--ckpt_dir`       | `str`        | The name of the directory to save checkpoints.               | `.model/rm`  |
+| `--gpu_id`         | `int`        | The GPU ID to use if CUDA is available.                      | `0`          |
+| `--max_len`        | `int`        | The maximum number of tokens.                                | `1024`       |
+| `--min_target_len` | `int`        | The minimum number of tokens of target output, except for tags and EOS token. | `1`          |
+| `--batch_size`     | `int`        | The batch size.                                              | `16`         |
+| `--num_epochs`     | `int`        | The number of epochs                                         | `3`          |
+| `--learning_rate`  | `float`      | The learning rate.                                           | `1e-5`       |
+| `--warmup_ratio`   | `float`      | The ratio of warm-up steps to the total training steps.      | `0.0`        |
+| `--use_fp16`       | `store_true` | Whether to use float16 mixed precision or not.               | Off          |
 
 <br/>
 
@@ -202,7 +203,7 @@ With default arguments, you will see `.model/dpo` directory created:
 | `--rm_model_path`     | `str`        | The checkpoint path of the reward model.                     | *REQUIRED*   |
 | `--ckpt_dir`          | `str`        | The name of the directory to save checkpoints.               | `.model/ppo` |
 | `--gpu_id`            | `int`        | The GPU ID to use if CUDA is available.                      | `0`          |
-| `--max_reward`        | `float`      | The maximum reward value. The reward range is set to [1.0, max]. | `5.0`        |
+| `--max_reward`        | `float`      | The maximum reward value. The reward is clamped to [-max, max] after multiplied with 0.1. | `5.0`        |
 | `--data_dir`          | `str`        | The name of the directory where data files are stored.       | `.data/pref` |
 | `--max_len`           | `int`        | The maximum number of tokens.                                | `1024`       |
 | `--min_gen_len`       | `int`        | The minimum number of tokens to generate, except for tags and EOS token. | `1`          |
@@ -221,25 +222,27 @@ With default arguments, you will see `.model/dpo` directory created:
 | `--gamma`             | `float`      | The discount factor for RL.                                  | `1.0`        |
 | `--epsilon`           | `float`      | The clipping value for PPO loss computation.                 | `0.2`        |
 | `--value_loss_coeff`  | `float`      | The coefficient to apply the value loss.                     | `0.1`        |
+| `--use_fp16`          | `store_true` | Whether to use float16 mixed precision or not.               | Off          |
 
 <br/>
 
 #### Step (4.b)
 
-| Argument           | Type    | Description                                                  | Default      |
-| ------------------ | ------- | ------------------------------------------------------------ | ------------ |
-| `--seed`           | `int`   | The random seed for data shuffling.                          | `42`         |
-| `--sft_model_path` | `str`   | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*   |
-| `--ckpt_dir`       | `str`   | The name of the directory to save checkpoints.               | `.model/dpo` |
-| `--gpu_id`         | `int`   | The GPU ID to use if CUDA is available.                      | `0`          |
-| `--data_dir`       | `str`   | The name of the directory where data files are stored.       | `.data/pref` |
-| `--max_len`        | `int`   | The maximum number of tokens.                                | `1024`       |
-| `--min_gen_len`    | `int`   | The minimum number of tokens to generate, except for tags and EOS token. | `1`          |
-| `--num_epochs`     | `int`   | The number of epochs.                                        | `1`          |
-| `--log_step`       | `int`   | The training step period to log the loss.                    | `100`        |
-| `--batch_size`     | `int`   | The batch size.                                              | `16`         |
-| `--learning_rate`  | `float` | The learning rate.                                           | `1e-5`       |
-| `--beta`           | `float` | The coefficient for per-token KL divergence penalty.         | `0.2`        |
+| Argument           | Type         | Description                                                  | Default      |
+| ------------------ | ------------ | ------------------------------------------------------------ | ------------ |
+| `--seed`           | `int`        | The random seed for data shuffling.                          | `42`         |
+| `--sft_model_path` | `str`        | The checkpoint path of the supervised fine-tuned model.      | *REQUIRED*   |
+| `--ckpt_dir`       | `str`        | The name of the directory to save checkpoints.               | `.model/dpo` |
+| `--gpu_id`         | `int`        | The GPU ID to use if CUDA is available.                      | `0`          |
+| `--data_dir`       | `str`        | The name of the directory where data files are stored.       | `.data/pref` |
+| `--max_len`        | `int`        | The maximum number of tokens.                                | `1024`       |
+| `--min_gen_len`    | `int`        | The minimum number of tokens to generate, except for tags and EOS token. | `1`          |
+| `--num_epochs`     | `int`        | The number of epochs.                                        | `1`          |
+| `--log_step`       | `int`        | The training step period to log the loss.                    | `100`        |
+| `--batch_size`     | `int`        | The batch size.                                              | `16`         |
+| `--learning_rate`  | `float`      | The learning rate.                                           | `1e-5`       |
+| `--beta`           | `float`      | The coefficient for per-token KL divergence penalty.         | `0.2`        |
+| `--use_fp16`       | `store_true` | Whether to use float16 mixed precision or not.               | Off          |
 
 <br/>
 

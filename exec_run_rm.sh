@@ -1,6 +1,6 @@
 python src/run_rm.py \
     --seed=42 \
-    --data_dir=.data/rm \
+    --data_dir=.data/pref \
     --sft_model_path=REQUIRED \
     --ckpt_dir=.model/rm \
     --gpu_id=0 \
@@ -9,5 +9,4 @@ python src/run_rm.py \
     --batch_size=16 \
     --num_epochs=3 \
     --learning_rate=1e-5 \
-    --warmup_ratio=0.0 \
-    --max_reward=5.0
+    --warmup_ratio=0.0
