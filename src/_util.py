@@ -191,7 +191,7 @@ class PrefDataset(Dataset):
 
             # Process pairs (chosen response, rejected response)
             sequence_ids += resp_start_token_ids
-            chosen_response, rejected_response = sample['preferred']['response'], sample['not_preferred']['response']
+            chosen_response, rejected_response = sample['chosen']['response'], sample['rejected']['response']
 
             resp_token_ids = tokenizer(chosen_response)['input_ids']
             gen_len = max_len - 1 - len(resp_end_token_ids) - len(sequence_ids)

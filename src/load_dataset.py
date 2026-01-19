@@ -75,8 +75,8 @@ def main(args: argparse.Namespace):
                 if annotations[chosen_idx]['score'] - annotations[rejected_idx]['score'] >= args.min_diff:
                     pref_dataset.append({
                         'instruction': instruction, 
-                        'chosen': {'response': annotations[chosen_idx]['response'], 'score': annotations[rejected_idx]['response']},
-                        'rejected': {'response': annotations[rejected_idx]['response'], 'score': annotations[rejected_idx]['response']}
+                        'chosen': {'response': annotations[chosen_idx]['response'], 'score': annotations[chosen_idx]['score']},
+                        'rejected': {'response': annotations[rejected_idx]['response'], 'score': annotations[rejected_idx]['score']}
                     })
                     sampled_idxs.add(chosen_idx)
                     sampled_idxs.add(rejected_idx)
