@@ -145,6 +145,7 @@ def _train(
 
             print("Computing rewards by reward model...")
             final_rewards, reward_locs = get_rewards(full_seqs, reward_model)  # (B), (B)
+            final_rewards = torch.clamp(final_rewards * 0.1, min=-args.max_reward, max=args.max_reward)  # (B)
 
             # Compute per-token KL divergence.
             print("Computing per-token KL divergences...")
@@ -254,6 +255,7 @@ def _train(
             with torch.no_grad():
                 full_seqs, _ = generate_by_policy(batch_set, policy, tokenizer, **generation_kwargs)  # (B, Q_L + R_L)
             final_rewards, _ = get_rewards(full_seqs, reward_model)  # (B)
+            final_rewards = torch.clamp(final_rewards * 0.1, min=-args.max_reward, max=args.max_reward)
             eval_rewards += final_rewards.tolist()
 
         eval_reward = np.mean(eval_rewards)
@@ -281,7 +283,7 @@ def main(args: argparse.Namespace):
     init_bias = (1.0 + args.max_reward) / 2  # Set the bias of value head to be in the middle of reward range.
     policy = PolicyWithValueHead(args.sft_model_path, init_bias).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
-    reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id, args.max_reward).to(device)
+    reward_model = RewardModel(args.sft_model_path, tokenizer.eos_token_id).to(device)
     state_dict = torch.load(f"{args.rm_model_path}/model.pth")
     reward_model.load_state_dict(state_dict)
     reward_model = reward_model.to(device)
@@ -336,7 +338,7 @@ if __name__=='__main__':
     parser.add_argument('--rm_model_path', type=str, required=True, help="The checkpoint path of the reward model.")
     parser.add_argument('--ckpt_dir', type=str, default=".model/ppo", help="The name of the directory to save checkpoints.")
     parser.add_argument('--gpu_id', type=int, default=0, help="The GPU ID to use if CUDA is available.")
-    parser.add_argument('--max_reward', type=float, default=5.0, help="The maximum reward value. The reward range is set to [1.0, max].")
+    parser.add_argument('--max_reward', type=float, default=5.0, help="The maximum reward value. The reward is clamped to [-max, max] after multiplied with 0.1.")
     parser.add_argument('--data_dir', type=str, default=".data/pref", help="The name of the directory where data files are stored.")
     parser.add_argument('--max_len', type=int, default=1024, help="The maximum number of tokens.")
     parser.add_argument('--min_gen_len', type=int, default=1, help="The minimum number of tokens to generate, except for tags and EOS token.")
