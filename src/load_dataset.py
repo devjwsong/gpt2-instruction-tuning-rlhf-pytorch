@@ -94,6 +94,7 @@ def main(args: argparse.Namespace):
     print("Random sampling & Splitting...")
     random.seed(args.seed)
     random.shuffle(sft_dataset)
+    random.seed(args.seed)
     random.shuffle(pref_dataset)
     sft_train_set, sft_eval_set = _split_train_eval(sft_dataset, args.train_ratio)
     pref_train_set, pref_eval_set = _split_train_eval(pref_dataset, args.train_ratio)
