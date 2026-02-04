@@ -10,4 +10,4 @@ python src/run_dpo.py \
     --log_step=100 \
     --batch_size=16 \
     --learning_rate=1e-5 \
-    --beta=0.2
+    --beta=0.1

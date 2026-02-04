@@ -229,7 +229,7 @@ if __name__=='__main__':
     parser.add_argument('--log_step', type=int, default=100, help="The training step period to log the loss.")
     parser.add_argument('--batch_size', type=int, default=16, help="The batch size.")
     parser.add_argument('--learning_rate', type=float, default=1e-5, help="The learning rate.")
-    parser.add_argument('--beta', type=float, default=0.2, help="The coefficient for per-token KL divergence penalty.")
+    parser.add_argument('--beta', type=float, default=0.1, help="The coefficient for per-token KL divergence penalty.")
     parser.add_argument('--use_fp16', action='store_true', help="Whether to use float16 mixed precision or not.")
 
     args = parser.parse_args()

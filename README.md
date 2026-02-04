@@ -241,7 +241,7 @@ With default arguments, you will see `.model/dpo` directory created:
 | `--log_step`       | `int`        | The training step period to log the loss.                    | `100`        |
 | `--batch_size`     | `int`        | The batch size.                                              | `16`         |
 | `--learning_rate`  | `float`      | The learning rate.                                           | `1e-5`       |
-| `--beta`           | `float`      | The coefficient for per-token KL divergence penalty.         | `0.2`        |
+| `--beta`           | `float`      | The coefficient for per-token KL divergence penalty.         | `0.1`        |
 | `--use_fp16`       | `store_true` | Whether to use float16 mixed precision or not.               | Off          |
 
 <br/>
